@@ -1,42 +1,41 @@
 ﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=upload.ico
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Run_AU3Check=n
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
-#include <GUIConstants.au3>
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
-#include <StaticConstants.au3>
 #include <EditConstants.au3>
-#include <GuiToolBar.au3>
+#include <SliderConstants.au3>
+#include <ComboConstants.au3>
 #include <ScreenCapture.au3>
+#include <GuiComboBox.au3>
 #include <GDIPlus.au3>
 #include <File.au3>
 #include <Misc.au3>
-#include "_ColorChooser.au3"
-#include "_ColorPicker.au3"
-#include "_FileDragDrop.au3"
-#include "_FreeImage.au3"
 
+#include <FTPEx.au3>
 #include "Array.au3"
 
+#include "_GifTConstants.au3"
+
 Global $hImage, $hGraphic, $hGUI
-$GIFTPATH 	= @HomeDrive & "\GifT\"
-$INIPATH 	= $GIFTPATH & "settings.ini"
-$LOGPATH	= $GIFTPATH & "uploads.log"
-$SHORTEN	= IniRead($INIPATH, "settings", "shorten", "waa.ai")
+
+$SHORTEN	= IniRead($INIPATH, "settings", "shorten", "none")
 $SERVICE 	= IniRead($INIPATH, "settings", "service", "imgur")
 $GIFTYPE 	= IniRead($INIPATH, "settings", "quantize", 0)
-_Splash(-1) ;Turn on splash image until loading is complete
+_Splash() ;Turn on splash image until loading is complete
 
 #region Error Check
 If _Singleton("GifT", 1) == 0 Then
-	MsgBox(262144, "Error", "GifT is already running!")
+	MsgBox($MB_TOPMOST, "Error", "GifT is already running!")
 	Exit
 EndIf
 
 If _dropboxCheck() == -1 Then
-	MsgBox(0, "Revert", "Reverting to imgur service...");	_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
+	MsgBox($MB_OK, "Revert", "Reverting to imgur service...")
+	_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
 	IniWrite($INIPATH, "settings", "service", "imgur")
 	Exit
 EndIf
@@ -47,15 +46,14 @@ EndIf
 
 $LOG = FileOpen($LOGPATH, 1)
 
-$VERSION = 14
-If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
-	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
+If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) = $GUI_CHECKED Then
+	$NEWVERSION = Number(BinaryToString(InetRead("http://rasu.us/GifT/version.txt")))
 	If $NEWVERSION > $VERSION Then
-		If MsgBox(262148, "Update", "New version of GifT available.  Would you like to download?" & @LF & @LF & "	Newest Version: " & $NEWVERSION) == 6 Then
-			If MsgBox(262148, "Update", "Would you like source files as well?") == 6 Then
-				ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT" & "v" & $NEWVERSION & ".rar", "", "", "open")
+		If MsgBox($MB_TOPMOST + $MB_ICONQUESTION + $MB_YESNO, "Update", "New version of GifT available.  Would you like to download?" & @LF & @LF & "	Newest Version: " & $NEWVERSION) = $IDYES Then
+			If MsgBox($MB_TOPMOST + $MB_ICONQUESTION + $MB_YESNO, "Update", "Would you like source files as well?") = $IDYES Then
+				ShellExecute("http://rasu.us/GifT/GifTv" & $NEWVERSION & ".rar", "", "", "open")
 			Else
-				ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT.exe", "", "", "open")
+				ShellExecute("http://rasu.us/GifT/GifT.exe", "", "", "open")
 			EndIf
 			_FileWriteLog($LOG, "Updated to version " & $NEWVERSION)
 			Exit
@@ -65,38 +63,36 @@ EndIf
 #endregion Errors
 
 #region Variables
-_Files()
-
-$CURL 		= $GIFTPATH & "curl.exe"
-$DIR 		= $GIFTPATH & "Local\"
+If _checkFiles() <> "" Then
+	If MsgBox($MB_TOPMOST + $MB_ICONQUESTION + $MB_YESNO, "Missing Files!", "You are missing the following files:" & @LF & @LF & _checkFiles() & @LF & @LF & "Would you like to download the installer?") = $IDYES Then
+		ShellExecute("http://rasu.us/GifT/Installer.exe", "", "", "open")
+	EndIf
+	Exit
+EndIf
+DirCreate($DIR)
 
 $PATH 		= IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-$PICSPATH	= IniRead($INIPATH, "settings", "picspath", $GIFTPATH & "Pictures\")
-$GIFSPATH	= IniRead($INIPATH, "settings", "gifspath", $GIFTPATH & "Gifs\")
 $UID 		= IniRead($INIPATH, "settings", "uid", "0")
 $LINK 		= "https://dl.dropboxusercontent.com/u/" & $UID & "/"
 $PUSHKEY	= IniRead($INIPATH, "settings", "pushkey", 0)
-$FPS 		= Round(100 / IniRead($INIPATH, "settings", "fps", 5)) * 10
-$DARK 		= IniRead($INIPATH, "settings", "backop", 200)
 $LIGHT 		= IniRead($INIPATH, "settings", "selop", 50)
-$BGCOLOR 	= IniRead($INIPATH, "settings", "backcol", 0)
-$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", 255)
-$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", 65280)
-$MOUSE 		= $GUI_CHECKED == IniRead($INIPATH, "settings", "mouse", $GUI_CHECKED)
-$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ v"), " ", "")
-$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"), " ", "")
+$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", 52479)
+$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", 16711680)
+$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ r"), " ", "")
+$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ e"), " ", "")
 $COMPKEY 	= StringReplace(IniRead($INIPATH, "settings", "completekey", "{F4}"), " ", "")
-$CANCKEY 	= StringReplace(IniRead($INIPATH, "settings", "cancelkey", "{ESC}"), " ", "")
+$SERVER 	= IniRead($INIPATH, "settings", "ftpserver", "")
+$USER 		= IniRead($INIPATH, "settings", "ftpuser", "")
+$PASS 		= IniRead($INIPATH, "settings", "ftppass", "")
 
 $FILENAME 	= "00-00-00_00.00.00" ;Will be changed Date_Time
 $UPLOADURL 	= ""
+$DEVICELIST = _FFmpeg_DeviceList()
 
-$started 	= 0
-$stop 		= 0
-$looping 	= 0
+$pid 		= 0
 
-HotKeySet($RECKEY, "_Record")
-HotKeySet($PICKEY, "_Picture")
+HotKeySet($RECKEY, $RECFUNC)
+HotKeySet($PICKEY, $PICFUNC)
 #endRegion
 
 #region Tray Menu + GUI Stuff
@@ -108,15 +104,7 @@ TrayCreateItem("")
 $TEXIT 		= TrayCreateItem("Exit")
 
 TraySetState()
-
-$BG 		= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$GIF 		= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$SQUARE 	= GUICreateSquare(0, 0, 0, 0, $BOXCOLOR)
-
-GUISetCursor(3, 1, $gif)
-
-GUISetState(@SW_SHOW, $bg)
-GUISetState(@SW_SHOW, $gif)
+$SQUARE 	= GUICreateFrame(0, 0, 0, 0, $BOXCOLOR)
 #endRegion
 
 #region Settings Window
@@ -125,105 +113,140 @@ $STABS 		= GUICtrlCreateTab(7, 7, 367, 195)
 
 #region Settings - General Tab
 GUICtrlCreateTabItem("General")
+$SVIDDEV	= GUICtrlCreateCombo($DEVICELIST[0][0] > 0 ? $DEVICELIST[0][1] : "No compatible Video devices", 90, 38, 190, 20, $CBS_DROPDOWNLIST )
+$SAUDDEV	= GUICtrlCreateCombo($DEVICELIST[1][0] > 0 ? $DEVICELIST[1][1] : "No compatible Audio devices", 90, 69, 190, 20, $CBS_DROPDOWNLIST )
 $SCOPY 		= GUICtrlCreateCheckbox(" Copy link to clipboard", 20, 98, 120, 20)
 $SOPEN 		= GUICtrlCreateCheckbox(" Open link in browser", 20, 123, 115, 20)
-$SPICS		= GUICtrlCreateCheckbox(" Save picture locally", 20, 148, 110, 20)
+$SSAVE 		= GUICtrlCreateCheckbox(" Save files locally", 20, 148, 110, 20)
 $SDELETE 	= GUICtrlCreateCheckbox(" Delete files after conversion", 20, 173, 150, 20)
-$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 205, 98, 125, 20)
-$SMOUSE 	= GUICtrlCreateCheckbox(" Capture screen with mouse", 205, 123, 150, 20)
-$SSAVE 		= GUICtrlCreateCheckbox(" Save gif file locally", 205, 148, 110, 20)
-$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 205, 173, 120, 20)
+$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 195, 98, 125, 20)
+$SMUTE 		= GUICtrlCreateCheckbox(" Mute audio device", 195, 123, 115, 20)
+$SENCODE	= GUICtrlCreateCheckbox(" Realtime Encode (CPU Heavy)", 195, 148, 165, 20)
+$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 195, 173, 120, 20)
 
-$SAPI 		= GUICtrlCreateInput(0, 102, 37, 260, 22)
-$SUID 		= GUICtrlCreateInput(0, 102, 67, 75, 22, $ES_NUMBER)
-$SFPS 		= GUICtrlCreateInput(5, 317, 67, 45, 22, $ES_NUMBER)
-GUICtrlCreateLabel("Puush API Key:", 17, 41, 90, 20)
-GUICtrlCreateLabel("Dropbox UID:", 17, 71, 80, 20)
-GUICtrlCreateLabel("Frames per Second:", 202, 71, 100, 20)
+$SADV		= GUICtrlCreateButton("Advanced...", 285, 36, 80, 56)
 
-GUICtrlSetLimit($SFPS, 2)
-GUICtrlSetLimit($SAPI, 32)
+GUICtrlCreateLabel("Video Device:", 17, 42, 80, 20)
+GUICtrlCreateLabel("Audio Device:", 17, 73, 80, 20)
+
+If $DEVICELIST[0][0] > 1 Then
+	$popDev = ""
+	For $i = 2 To $DEVICELIST[0][0]
+		$popDev &= $DEVICELIST[0][$i] & "|"
+	Next
+	;ConsoleWrite($popDev & @CRLF)
+	GUICtrlSetData($SVIDDEV, $popDev, "No Video Devices")
+EndIf
+
+If $DEVICELIST[1][0] > 1 Then
+	$popDev = ""
+	For $i = 2 To $DEVICELIST[1][0]
+		$popDev &= $DEVICELIST[1][$i] & "|"
+	Next
+	;ConsoleWrite($popDev & @CRLF)
+	GUICtrlSetData($SAUDDEV, $popDev, $DEVICELIST[1][1])
+EndIf
+
+GUICtrlSetState($SENCODE, $GUI_CHECKED)
+GUICtrlSetState($SENCODE, $GUI_DISABLE)
+;_ArrayDisplay($DEVICELIST)
 #endregion
 
 #region Settings - Hotkeys Tab
 GUICtrlCreateTabItem("Hotkeys")
-$SRECORD 	= GUICtrlCreateButton("CTRL + SHIFT + V", 165, 40, 150, 26)
-$SPICTURE 	= GUICtrlCreateButton("CTRL + SHIFT + 4", 165, 70, 150, 26)
+$SRECORD 	= GUICtrlCreateButton("CTRL + SHIFT + R", 165, 40, 150, 26)
+$SPICTURE 	= GUICtrlCreateButton("CTRL + SHIFT + E", 165, 70, 150, 26)
 $SCOMPLETE 	= GUICtrlCreateButton("F4", 165, 100, 150, 26)
-$SCANCEL 	= GUICtrlCreateButton("ESC", 165, 130, 150, 26)
 
 $SRECDF 	= GUICtrlCreateButton("q", 320, 40, 40, 26)
 $SPICDF 	= GUICtrlCreateButton("q", 320, 70, 40, 26)
 $SCOMPDF 	= GUICtrlCreateButton("q", 320, 100, 40, 26)
-$SCANCDF 	= GUICtrlCreateButton("q", 320, 130, 40, 26)
 
 GUICtrlSetFont($SRECDF, 12, 400, 0, "Webdings")
 GUICtrlSetFont($SPICDF, 12, 400, 0, "Webdings")
 GUICtrlSetFont($SCOMPDF, 12, 400, 0, "Webdings")
-GUICtrlSetFont($SCANCDF, 12, 400, 0, "Webdings")
 
 GUICtrlCreateLabel("Select Area for Recording:", 25, 45, 125, 20, $ES_RIGHT)
 GUICtrlCreateLabel("Select Area for Picture:", 25, 75, 125, 20, $ES_RIGHT)
 GUICtrlCreateLabel("Complete Recording:", 25, 105, 125, 20, $ES_RIGHT)
-GUICtrlCreateLabel("Cancel Select/Record:", 25, 135, 125, 20, $ES_RIGHT)
 #endregion
 
 #region Settings - Paths Tab
 GUICtrlCreateTabItem("Paths")
-GUICtrlCreateGroup("Gif Save Path:", 15, 35, 350, 50)
-GUICtrlCreateGroup("Picture Save Path:", 15, 90, 350, 50)
-GUICtrlCreateGroup("Dropbox Path:", 15, 145, 350, 50)
-$SGIFSPATH 		= GUICtrlCreateInput($GIFTPATH & "Gifs\", 25, 54, 255, 22)
-$SPICSPATH 		= GUICtrlCreateInput($GIFTPATH & "Pictures\", 25, 109, 255, 22)
-$SDROPPATH 		= GUICtrlCreateInput(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\", 25, 164, 255, 22)
-$SGIFSBROWSE 	= GUICtrlCreateButton("Browse...", 288, 52, 70, 25)
-$SPICSBROWSE 	= GUICtrlCreateButton("Browse...", 288, 107, 70, 25)
-$SDROPBROWSE 	= GUICtrlCreateButton("Browse...", 288, 162, 70, 25)
+GUICtrlCreateGroup("File Save Path", 15, 35, 350, 50)
+GUICtrlCreateGroup("Dropbox Path", 15, 90, 350, 50)
+
+$SDIRPATH 		= GUICtrlCreateInput($DIR, 25, 54, 255, 22)
+$SDROPPATH 		= GUICtrlCreateInput(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\", 25, 109, 255, 22)
+
+$SDIRBROWSE 	= GUICtrlCreateButton("Browse...", 288, 52, 70, 25)
+$SDROPBROWSE 	= GUICtrlCreateButton("Browse...", 288, 107, 70, 25)
 #endregion
 
-#region Settings - Colors Tab
-GUICtrlCreateTabItem("Colors")
-$SBACKOP 	= GUICtrlCreateInput(200, 93, 54, 55, 22, $ES_NUMBER)
-$SSELOP 	= GUICtrlCreateInput(50, 93, 109, 55, 22, $ES_NUMBER)
-$SBOXOP 	= GUICtrlCreateInput(255, 93, 164, 55, 22, $ES_NUMBER)
-$SBACKCOL 	= _GUIColorPicker_Create('', 235, 52, 48, 26, IniRead($INIPATH, "settings", "backcol", "0"), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
-$SSELCOL 	= _GUIColorPicker_Create('', 235, 107, 48, 26, IniRead($INIPATH, "settings", "selcol", "255"), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
-$SBOXCOL 	= _GUIColorPicker_Create('', 235, 162, 48, 26, IniRead($INIPATH, "settings", "boxcol", "65280"), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
+#region Settings - Info Tab
+GUICtrlCreateTabItem("Info")
+GUICtrlCreateGroup("FTP", 15, 35, 350, 50)
+GUICtrlCreateGroup("Puush", 15, 90, 350, 50)
+GUICtrlCreateGroup("Dropbox", 15, 145, 350, 50)
+$SFTPSERVER	= GUICtrlCreateInput("", 25, 54, 120, 22)
+$SFTPUSER	= GUICtrlCreateInput("", 155, 54, 100, 22)
+$SFTPPASS	= GUICtrlCreateInput("", 265, 54, 85, 22)
+$SAPI 		= GUICtrlCreateInput(0, 110, 109, 240, 22)
+$SUID 		= GUICtrlCreateInput(0, 102, 164, 75, 22, $ES_NUMBER)
 
-GUICtrlCreateGroup("Background", 15, 35, 350, 50)
-GUICtrlCreateLabel("Opacity:", 25, 58, 65, 20)
-GUICtrlCreateLabel("Color:", 185, 58, 60, 20)
-GUICtrlCreateGroup("Select Rectangle", 15, 90, 350, 50)
-GUICtrlCreateLabel("Opacity:", 25, 113, 75, 20)
-GUICtrlCreateLabel("Color:", 185, 113, 60, 20)
-GUICtrlCreateGroup("Recording Rectangle", 15, 145, 350, 50)
-GUICtrlCreateLabel("Opacity:", 25, 168, 75, 20)
-GUICtrlCreateLabel("Color:", 185, 168, 60, 20)
+GUICtrlCreateLabel("Puush API Key:", 25, 113, 90, 20)
+GUICtrlCreateLabel("Dropbox UID:", 25, 168, 259, 20)
 
-GUICtrlSetState($SBOXOP, $GUI_DISABLE)
-GUICtrlSetLimit($SBACKOP, 3)
-GUICtrlSetLimit($SSELOP, 3)
+GUICtrlSendMsg($SFTPPASS, $EM_SETPASSWORDCHAR, 9679, 0)
+GUICtrlSendMsg($SAPI, $EM_SETPASSWORDCHAR, 9679, 0)
+_GUICtrlEdit_SetCueBanner($SFTPSERVER, "FTP Server")
+_GUICtrlEdit_SetCueBanner($SFTPUSER, "Username")
+_GUICtrlEdit_SetCueBanner($SFTPPASS, "Password")
+GUICtrlSetLimit($SAPI, 32)
 #endregion
+
 
 #region Settings - Services Tab
 GUICtrlCreateTabItem("Services")
 GUICtrlCreateGroup("URL Shorteners", 15, 35, 350, 50)
-GUIStartGroup()
 $SWAAAI 	= GUICtrlCreateRadio("waa.ai", 25, 55, 70, 20)
 $SBITLY 	= GUICtrlCreateRadio("bit.ly", 135, 55, 70, 20)
 $SNSHORT 	= GUICtrlCreateRadio("None", 245, 55, 70, 20)
-GUICtrlCreateGroup("Image Hosters", 15, 90, 350, 50)
-GUIStartGroup()
-$SIMGUR 	= GUICtrlCreateRadio("imgur", 25, 110, 70, 20)
-$SPUUSH 	= GUICtrlCreateRadio("puush", 135, 110, 70, 20)
-$SDROPBOX 	= GUICtrlCreateRadio("dropbox", 245, 110, 70, 20)
-GUICtrlCreateLabel("- Imgur has a file limit of 2MB", 15, 175, 200, 20)
+GUICtrlCreateGroup("Image Hosters", 15, 90, 350, 80)
+$SIMGUR 	= GUICtrlCreateRadio("Imgur", 25, 110, 70, 20)
+$SFTP	 	= GUICtrlCreateRadio("FTP", 135, 110, 70, 20)
+$SPUUSH 	= GUICtrlCreateRadio("Puush", 245, 110, 70, 20)
+$SDROPBOX 	= GUICtrlCreateRadio("Dropbox", 25, 140, 70, 20)
+$SNHOST	 	= GUICtrlCreateRadio("None", 135, 140, 70, 20)
+GUICtrlCreateLabel("- Imgur has a file limit of 2MB", 15, 180, 200, 20)
 #endregion
 
-#region Misc. Tab
+#region Settings - Colors Tab
+GUICtrlCreateTabItem("Colors")
+$SSELOP 	= GUICtrlCreateSlider(75, 55, 165, 26, BitOr($TBS_NOTICKS, $TBS_TOOLTIPS))
+$SBOXOP 	= GUICtrlCreateSlider(75, 110, 165, 26, BitOr($TBS_NOTICKS, $TBS_TOOLTIPS))
+$SSELCOL 	= _GUIColorPicker_Create('', 300, 50, 48, 26,IniRead($INIPATH, "settings", "selcol", 52479), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
+$SBOXCOL	= _GUIColorPicker_Create('', 300, 105, 48, 26, IniRead($INIPATH, "settings", "boxcol", 16711680), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
+
+GUICtrlSetBkColor($SSELOP, 0xFFFFFF)
+GUICtrlSetBkColor($SBOXOP, 0xFFFFFF)
+GUICtrlSetLimit($SSELOP, 255)
+GUICtrlSetLimit($SBOXOP, 255)
+GUICtrlSetData($SBOXOP, 255)
+
+GUICtrlCreateGroup("Selection Box", 15, 35, 350, 50)
+GUICtrlCreateLabel("Opacity:", 30, 56, 65, 20)
+GUICtrlCreateLabel("Color:", 260, 56, 60, 20)
+GUICtrlCreateGroup("Recording Box", 15, 90, 350, 50)
+GUICtrlCreateLabel("Opacity:", 30, 111, 75, 20)
+GUICtrlCreateLabel("Color:", 260, 111, 60, 20)
+
+GUICtrlSetState($SBOXOP, $GUI_DISABLE)
+#endregion
+
+#region Settings - Misc. Tab
 GUICtrlCreateTabItem("Misc.")
 GUICtrlCreateGroup("Color Quantization", 15, 35, 350, 50)
-GUIStartGroup()
 $SCQXIAO 	= GUICtrlCreateRadio("Xiaolin Wu", 25, 55, 70, 20)
 $SCQNEURAL 	= GUICtrlCreateRadio("Neural-Net", 135, 55, 70, 20)
 $SCQNONE 	= GUICtrlCreateRadio("None", 245, 55, 70, 20)
@@ -236,199 +259,186 @@ GUICtrlCreateGroup("Gif Editing", 15, 145, 350, 50)
 $SEDIT	 	= GUICtrlCreateCheckbox(" Prompt edit before upload", 25, 165, 150, 20)
 $SEDITBUT	= GUICtrlCreateButton("Manually edit a gif", 220, 160, 130, 27)
 GUICtrlSetState($SEDIT, $GUI_DISABLE);TEMP
+#endRegion
 
-#region Hotkey window
-$SHOTKEY 	= GUICreate("Set Hotkey", 250, 80, -1, -1, $WS_SYSMENU, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+GUICtrlCreateTabItem("To-do")
+$STODO = "- Make program stop recording if ffmpeg process disappears" & @LF
+$STODO &= "- Add option to encode after recording is finished so slower computers won't lag or freeze up" & @LF
+$STODO &= "- Create upload queue so that program doesn't freeze while uploading" & @LF
+$STODO &= "- Move color quantization to advanced settings" & @LF
+$STODO &= "- Change gif editor to a video editor" & @LF
+$STODO &= "- Add port selection and encryption to FTP upload" & @LF
+$STODO &= "- Redo logo splash screen in c++ for less lags" & @LF
+$STODO &= "- Change temporary files so that they are not in folders anymore" & @LF
+GUICtrlCreateLabel($STODO, 15, 35, 350, 175)
 
-$SKEY1 		= GUICtrlCreateCombo("NONE", 15, 17, 60, 20)
-$SKEY2 		= GUICtrlCreateCombo("NONE", 90, 17, 60, 20)
-$SKEY3 		= GUICtrlCreateCombo("0", 165, 17, 60, 20)
-GUICtrlSetData($SKEY1, "ALT|CTRL|SHIFT|WIN", "NONE")
-GUICtrlSetData($SKEY2, "ALT|CTRL|SHIFT|WIN", "NONE")
-GUICtrlSetData($SKEY3, "1|2|3|4|5|6|7|8|9|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|ESC", "0")
-#endregion
 
-#region Gif Edit window
-$EIMGH 		= 500
-$EIMGW 		= 600
-$EGIFFILE 	= 0
-$ECURF 		= 1
-$EMAXF 		= 1
-$ESLIDEH 	= 0
-$EGRAPHIC 	= 0
-
-$EMAIN 		= GUICreate("Gif Editor", $EIMGW, $EIMGH, -1, -1, $WS_SYSMENU)
-$EPATHL 	= GUICtrlCreateLabel("Gif Source:", 10, 10, 70, 20)
-$EPATH 		= GUICtrlCreateInput("C:\GifT\Local\", 75, 9, 240, 20)
-$EBROWSE 	= GUICtrlCreateButton("Browse...", 325, 5, 70, 27)
-$ELOAD 		= GUICtrlCreateButton("Load Gif", 405, 5, 60, 27)
-
-$EFCUR 		= GUICtrlCreateLabel("1", 500, 10, 30, 20, $SS_RIGHT)
-$EFMAX 		= GUICtrlCreateLabel("/ ?", 535, 10, 30, 20)
-$EGROUP 	= GUICtrlCreateGroup("Gif Preview", 10, 35, 575, 365)
-
-$ESLIDE 	= GUICtrlCreateSlider(10, 400, 575, 30)
-
-$EPREVF 	= GUICtrlCreateButton("<", 10, 435, 40, 30)
-$ENEXTF 	= GUICtrlCreateButton(">", 55, 435, 40, 30)
-$EINSERT 	= GUICtrlCreateButton("Insert", 110, 435, 65, 30)
-$EREMOVE 	= GUICtrlCreateButton("Remove", 180, 435, 65, 30)
-$EPLAY		= GUICtrlCreateButton("Play", 260, 435, 65, 30)
-$EFPSL		= GUICtrlCreateLabel("FPS:", 400, 440, 50, 30)
-$EFPS		= GUICtrlCreateInput("10", 435, 437, 40, 25)
-$ESAVE		= GUICtrlCreateButton("Done!", 490, 435, 85, 30)
-
-GUICtrlSetResizing($EPATHL, $GUI_DOCKALL)
-GUICtrlSetResizing($EPATH, $GUI_DOCKALL)
-GUICtrlSetResizing($EBROWSE, $GUI_DOCKALL)
-GUICtrlSetResizing($ELOAD, $GUI_DOCKALL)
-GUICtrlSetResizing($EFCUR, $GUI_DOCKALL)
-GUICtrlSetResizing($EFMAX, $GUI_DOCKALL)
-GUICtrlSetResizing($EGROUP, $GUI_DOCKBORDERS)
-GUICtrlSetResizing($ESLIDE, 4+64+512)
-GUICtrlSetResizing($EPREVF, 2+64+256+512)
-GUICtrlSetResizing($ENEXTF, 2+64+256+512)
-GUICtrlSetResizing($EINSERT, 2+64+256+512)
-GUICtrlSetResizing($EREMOVE, 2+64+256+512)
-GUICtrlSetResizing($EPLAY, 2+64+256+512)
-GUICtrlSetResizing($EFPSL, 4+64+256+512)
-GUICtrlSetResizing($EFPS, 4+64+256+512)
-GUICtrlSetResizing($ESAVE, 4+64+256+512)
-
-GUICtrlSetState($ESLIDE, $GUI_DISABLE)
-GUICtrlSetState($EPREVF, $GUI_DISABLE)
-GUICtrlSetState($ENEXTF, $GUI_DISABLE)
-GUICtrlSetState($EINSERT, $GUI_DISABLE)
-GUICtrlSetState($EREMOVE, $GUI_DISABLE)
-GUICtrlSetState($EPLAY, $GUI_DISABLE)
-GUICtrlSetState($ESAVE, $GUI_DISABLE)
-#endregion
-#endregion Settings Window
-
-#region Load information
 _loadIni()
-If Not FileExists($GIFTPATH & "settings.ini") Then
-	_updateIni()
-EndIf
 
-_updateGUI()
+$boxDll = DllOpen($GIFTPATH & "areabox.dll")
+DllCall($boxDll, "none", "initialize")
+if @error Then ConsoleWrite("error: " & @error & @CRLF)
 _endSplash()
+GUISetState(@SW_SHOW, $SMAIN)
 #endRegion
 
 While 1 ;Program Loop
 	$TMSG = TrayGetMsg()
-	Select
-		Case $TMSG = $TEXIT
+	Switch $TMSG
+		Case $TEXIT
 			_Exit()
 
-		Case $TMSG = $TABOUT
-			MsgBox(64, "About: GifT v" & $VERSION, "GIF recorder and uploader via Imgur/Puush/Dropbox" & @LF & "with waa.ai/bit.ly as the URL shortener" & @LF & @LF & "Coded in Autoit")
+		Case $TABOUT
+			MsgBox($MB_ICONINFORMATION, "About: GifT v" & $VERSION, "GIF recorder and uploader via Imgur/Puush/Dropbox" & @LF & "with waa.ai/bit.ly as the URL shortener" & @LF & @LF & "Coded in Autoit")
 
-		Case $TMSG = $TSETTINGS ;Open Settings Window
+		Case $TSETTINGS ;Open Settings Window
 			GUISetState(@SW_SHOW, $SMAIN)
-	EndSelect
+	EndSwitch
 
 	$MSG = GUIGetMsg()
 	Switch $MSG
 		Case $GUI_EVENT_CLOSE
-			_updateIni()
+			Exit
 			_updateVar()
-			_updateGUI()
 			If _dropboxCheck() == -1 Then
-				MsgBox(0, "Revert", "Reverting to imgur service...")
+				MsgBox($MB_OK, "Revert", "Reverting to imgur service...")
 				_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
 				IniWrite($INIPATH, "settings", "service", "imgur")
 				Exit
 			EndIf
 			GUISetState(@SW_HIDE, $SMAIN)
 
+		Case $SVIDDEV
+			IniWrite($INIPATH, "settings", "video", '"' & GUICtrlRead($SVIDDEV) & '"')
+
+		Case $SAUDDEV
+			IniWrite($INIPATH, "settings", "audio", '"' & GUICtrlRead($SAUDDEV) & '"')
+
+		Case $SADV
+			GUISetState(@SW_HIDE, $SMAIN)
+			_AdvancedSettings()
+			GUISetState(@SW_SHOW, $SMAIN)
+
+		Case $SCOPY
+			IniWrite($INIPATH, "settings", "copy", GUICtrlRead($SCOPY))
+
+		Case $SOPEN
+			IniWrite($INIPATH, "settings", "open", GUICtrlRead($SOPEN))
+
+		Case $SSAVE
+			IniWrite($INIPATH, "settings", "save", GUICtrlRead($SSAVE))
+
+		Case $SDELETE
+			IniWrite($INIPATH, "settings", "delete", GUICtrlRead($SDELETE))
+
+		Case $SSOUND
+			IniWrite($INIPATH, "settings", "sound", GUICtrlRead($SSOUND))
+
+		Case $SMUTE
+			GUICtrlSetState($SAUDDEV, GUICtrlRead($SMUTE) = $GUI_UNCHECKED ? $GUI_ENABLE : $GUI_DISABLE)
+			IniWrite($INIPATH, "settings", "mute", GUICtrlRead($SMUTE))
+
+		Case $SUPDATE
+			IniWrite($INIPATH, "settings", "update", GUICtrlRead($SUPDATE))
+
+		Case $SDROPPATH
+			If Not FileExists(GUICtrlRead($SDROPPATH)) Then
+				GUICtrlSetData($SDROPPATH, @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
+			EndIf
+			IniWrite($INIPATH, "settings", "droppath", GUICtrlRead($SDROPPATH))
+
+		Case $SDIRPATH
+			If Not FileExists(GUICtrlRead($SDIRPATH)) Then
+				GUICtrlSetData($SDIRPATH, $DIR)
+			EndIf
+			IniWrite($INIPATH, "settings", "dirpath", GUICtrlRead($SDIRPATH))
+
 		Case $SDROPBROWSE
 			$temp = FileSelectFolder("Dropbox Upload Path...", "", 3, GUICtrlRead($SDROPPATH))
 			If Not @error Then
 				GUICtrlSetData($SDROPPATH, $temp & "\")
 			EndIf
+			IniWrite($INIPATH, "settings", "droppath", GUICtrlRead($SDROPPATH))
 
-		Case $SPICSBROWSE
-			$temp = FileSelectFolder("Picture Save Path...", "", 3, GUICtrlRead($SPICSPATH))
+		Case $SDIRBROWSE
+			$temp = FileSelectFolder("File Save Path...", "", 3, GUICtrlRead($SDIRPATH))
 			If Not @error Then
-				GUICtrlSetData($SPICSPATH, $temp & "\")
+				GUICtrlSetData($SDIRPATH, $temp & "\")
 			EndIf
+			IniWrite($INIPATH, "settings", "dirpath", GUICtrlRead($SDIRPATH))
 
-		Case $SGIFSBROWSE
-			$temp = FileSelectFolder("Animated Gif Save Path...", "", 3, GUICtrlRead($SGIFSPATH))
-			If Not @error Then
-				GUICtrlSetData($SGIFSPATH, $temp & "\")
-			EndIf
-
-		Case $SRECORD
+		Case $SRECORD, $SPICTURE, $SCOMPLETE
 			GUISetState(@SW_HIDE, $SMAIN)
-			GUICtrlSetData($SRECORD, _selectKey($SRECORD))
-			If GUICtrlRead($SRECORD) = "CTRL + SHIFT + V" Then
-				GUICtrlSetState($SRECDF, $GUI_DISABLE)
-			Else
-				GUICtrlSetState($SRECDF, $GUI_ENABLE)
-			EndIf
+			$sMSG = $MSG
+			GUICtrlSetData($MSG, _selectKey($MSG))
+			Switch $sMSG
+				Case $SRECORD
+					GUICtrlSetState($SRECDF, GUICtrlRead($SRECORD) <> "CTRL + SHIFT + R" ? $GUI_ENABLE : $GUI_DISABLE)
+					_updateHotkey(StringSplit(GUICtrlRead($SRECORD), " + ", 1), "recordkey")
 
-		Case $SPICTURE
-			GUISetState(@SW_HIDE, $SMAIN)
-			GUICtrlSetData($SPICTURE, _selectKey($SPICTURE))
-			If GUICtrlRead($SPICTURE) = "CTRL + SHIFT + 4" Then
-				GUICtrlSetState($SPICDF, $GUI_DISABLE)
-			Else
-				GUICtrlSetState($SPICDF, $GUI_ENABLE)
-			EndIf
+				Case $SPICTURE
+					GUICtrlSetState($SPICDF, GUICtrlRead($SPICTURE) <> "CTRL + SHIFT + E" ? $GUI_ENABLE : $GUI_DISABLE)
+					_updateHotkey(StringSplit(GUICtrlRead($SPICTURE), " + ", 1), "picturekey")
 
-		Case $SCOMPLETE
-			GUISetState(@SW_HIDE, $SMAIN)
-			GUICtrlSetData($SCOMPLETE, _selectKey($SCOMPLETE))
-			If GUICtrlRead($SCOMPLETE) <> "F4" Then
-				GUICtrlSetState($SCOMPDF, $GUI_DISABLE)
-			Else
-				GUICtrlSetState($SCOMPDF, $GUI_ENABLE)
-			EndIf
-
-		Case $SCANCEL
-			GUISetState(@SW_HIDE, $SMAIN)
-			GUICtrlSetData($SCANCEL, _selectKey($SCANCEL))
-			If GUICtrlRead($SCANCEL) <> "ESC" Then
-				GUICtrlSetState($SCANCDF, $GUI_DISABLE)
-			Else
-				GUICtrlSetState($SCOMPDF, $GUI_ENABLE)
-			EndIf
+				Case $SCOMPLETE
+					GUICtrlSetState($SCOMPDF, GUICtrlRead($SCOMPLETE) <> "F4" ? $GUI_ENABLE : $GUI_DISABLE)
+					_updateHotkey(StringSplit(GUICtrlRead($SCOMPLETE), " + ", 1), "completekey")
+			EndSwitch
+			GUISetState(@SW_SHOW, $SMAIN)
 
 		Case $SRECDF
-			If MsgBox(262148, "Reset", "Do you want to reset your 'recording' hotkey to default settings?") == 6 Then
-				GUICtrlSetData($SRECORD, "CTRL + SHIFT + V")
+			If MsgBox($MB_TOPMOST + $MB_YESNO, "Reset", "Do you want to reset your 'recording' hotkey to default settings?") = $IDYES Then
+				GUICtrlSetData($SRECORD, "CTRL + SHIFT + R")
 				IniDelete($INIPATH, "settings", "recordkey")
 				GUICtrlSetState($SRECDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SPICDF
-			If MsgBox(262148, "Reset", "Do you want to reset your 'picture' hotkey to default settings?") == 6 Then
-				GUICtrlSetData($SPICTURE, "CTRL + SHIFT + 4")
+			If MsgBox($MB_TOPMOST + $MB_YESNO, "Reset", "Do you want to reset your 'picture' hotkey to default settings?") = $IDYES Then
+				GUICtrlSetData($SPICTURE, "CTRL + SHIFT + E")
 				IniDelete($INIPATH, "settings", "picturekey")
 				GUICtrlSetState($SPICDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SCOMPDF
-			If MsgBox(262148, "Reset", "Do you want to reset your 'complete' hotkey to default settings?") == 6 Then
+			If MsgBox($MB_TOPMOST + $MB_YESNO, "Reset", "Do you want to reset your 'complete' hotkey to default settings?") = $IDYES Then
 				GUICtrlSetData($SCOMPLETE, "F4")
 				IniDelete($INIPATH, "settings", "completekey")
 				GUICtrlSetState($SCOMPDF, $GUI_DISABLE)
 			EndIf
 
-		Case $SCANCDF
-			If MsgBox(262148, "Reset", "Do you want to reset your 'cancel' hotkey to default settings?") == 6 Then
-				GUICtrlSetData($SCANCEL, "ESC")
-				IniDelete($INIPATH, "settings", "cancelkey")
-				GUICtrlSetState($SCANCDF, $GUI_DISABLE)
-			EndIf
+		Case $SFTPSERVER
+			IniWrite($INIPATH, "settings", "ftpserver", GUICtrlRead($SFTPSERVER))
+
+		Case $SFTPUSER
+			IniWrite($INIPATH, "settings", "ftpuser", GUICtrlRead($SFTPUSER))
+
+		Case $SFTPPASS
+			IniWrite($INIPATH, "settings", "ftppass", GUICtrlRead($SFTPPASS))
+
+		Case $SAPI
+			IniWrite($INIPATH, "settings", "pushkey", GUICtrlRead($SAPI))
+
+		Case $SUID
+			IniWrite($INIPATH, "settings", "uid", GUICtrlRead($SUID))
+
+		Case $SSELOP
+			$LIGHT = GUICtrlRead($SSELOP)
+			IniWrite($INIPATH, "settings", "selop", $LIGHT)
+
+		Case $SSELCOL
+			$SELCOLOR = _GUIColorPicker_GetColor($SSELCOL)
+			IniWrite($INIPATH, "settings", "selcol", $SELCOLOR)
+
+		Case $SBOXCOL
+			$BOXCOLOR = _GUIColorPicker_GetColor($SBOXCOL)
+			IniWrite($INIPATH, "settings", "boxcol", $BOXCOLOR)
 
 		Case $SWAAAI, $SBITLY, $SNSHORT
 			$SHORTEN = GUICtrlRead($MSG, 1)
 			IniWrite($INIPATH, "settings", "shorten", $SHORTEN)
 
-		Case $SIMGUR, $SPUUSH, $SDROPBOX
+		Case $SIMGUR, $SFTP, $SPUUSH, $SDROPBOX, $SNHOST
 			$SERVICE = GUICtrlRead($MSG, 1)
 			IniWrite($INIPATH, "settings", "service", $SERVICE)
 
@@ -446,749 +456,240 @@ While 1 ;Program Loop
 		Case $SDLSOURCE
 			$VER = GUICtrlRead($SVSELECT)
 			If $VER < 1 Or $VER > $VERSION Then
-				MsgBox(0, "Error!", "Invalid version number. Please try again.")
+				MsgBox($MB_OK, "Error!", "Invalid version number. Please try again.")
 			Else
-				ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT" & "v" & $VER & ".rar", "", "", "open")
+				ShellExecute("http://rasu.us/GifT/GifTv" & $VER & ".rar", "", "", "open")
 			EndIf
 
 		Case $SEDITBUT
 			GUISetState(@SW_HIDE, $SMAIN)
-			GUISetState(@SW_SHOW, $EMAIN)
 			_GifEdit()
 			GUISetState(@SW_SHOW, $SMAIN)
 			;MsgBox(0, "Unprogrammed", "This function is not yet programmed!")
 			;Exit
+
 	EndSwitch
-	Sleep(5)
 WEnd
 
-Func _Capture($l, $t, $w, $h) ;Takes pictures of the selection until stopped
-	$started = 1
-	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & Mod(@HOUR, 12) & "." & @MIN & "." & @SEC
-	DirCreate($dir & $FILENAME)
-	Sleep(200)
-	$time = timerInit()
-	If $GIFTYPE == 0 Then
-		$EXT = ".gif"
-	Else
-		$EXT = ".png"
-	EndIf
-	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & $EXT, $l, $t, $w, $h, $MOUSE) ;First picture is the name of the entire animated gif
-	For $i = 1000 To 4999 ;Starts at 1000 to ensure files are ordered correctly
-		While TimerDiff($time) < $FPS
-			Sleep(10)
-		WEnd
-		$time = timerInit()
-		_ScreenCapture_Capture($dir & $FILENAME & "\~" & $i & $EXT, $l, $t, $w, $h, $MOUSE)
-		If $started == 0 Then ;runs until stopped
-			Return
-		EndIf
-	Next
+Func _Record($box) ;Records the selection until terminated
+	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "." & @MIN & "." & @SEC
+	DirCreate($DIR & $FILENAME)
+	$pid = _FFmpeg_Record($box[0], $box[1], $box[2], $box[3], $DIR & $FILENAME & "\" & $FILENAME & ".mkv", GUICtrlRead($SVIDDEV), GUICtrlRead($SAUDDEV), GUICtrlRead($SMUTE) = $GUI_CHECKED) ;Might be problematic since you can do things while video recording
 EndFunc   ;==>_Capture
 
-Func _takePicture($l, $t, $w, $h) ;Takes a picture of the selection and uploads
-	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & Mod(@HOUR, 12) & "." & @MIN & "." & @SEC
-	_ScreenCapture_Capture($PICSPATH & $FILENAME & ".png", $l, $t, $w, $h, False)
-	If $service = "dropbox" Then
-		If _dropboxCheck() = -1 Then ;If it fails dropbox check
-			If GUICtrlRead($SPICS) == $GUI_UNCHECKED Then
-				FileDelete($PICSPATH & $FILENAME & ".png")
-			EndIf
-			Exit
-		EndIf
-		FileCopy($PICSPATH & $FILENAME & ".png", $path & $FILENAME & ".png")
-		$UPLOADURL = _shortURL($LINK & $FILENAME & ".png")
-		While Not StringInStr(_GetTrayText("Dropbox"), "Up to date")
-			Sleep(100)
-		WEnd
-	Else
-		If $service = "imgur" Then
-			$ERRCHECK = _imgurUpload($PICSPATH & $FILENAME & ".png")
-		ElseIf $service = "puush" Then
-			$ERRCHECK = _puushUpload($PICSPATH & $FILENAME & ".png", $PUSHKEY)
-		EndIf
-		If $ERRCHECK == -1 Then
-			;MsgBox(0, "Error", "There seems to have been an error with uploading")
-			TrayTip("Upload Failed", "There was an error.", 5, 1)
-			return
-		EndIf
-		$UPLOADURL = _shortURL($ERRCHECK)
-	EndIf
-
-	If GUICtrlRead($SPICS) == $GUI_UNCHECKED Then
-		FileDelete($PICSPATH & $FILENAME & ".png")
-	EndIf
-
-	If GUICtrlRead($SSOUND) == $GUI_CHECKED Then
-		SoundPlay($GIFTPATH & "beep.mp3")
-	EndIf
-
-	TrayTip("Upload Complete", $UPLOADURL, 5, 1)
-	If GUICtrlRead($SCOPY) == $GUI_CHECKED Then
-		ClipPut($UPLOADURL)
-	EndIf
-	If GUICtrlRead($SOPEN) == $GUI_CHECKED Then
-		ShellExecute($UPLOADURL, "", "", "open")
-	EndIf
-	HotKeySet($RECKEY, "_Record")
-	HotKeySet($PICKEY, "_Picture")
-
-	If $SERVICE <> "dropbox" Then
-		_FileWriteLog($LOG, "Uploaded " & $FILENAME & ".png" & " via " & $SERVICE & " URL=" & $ERRCHECK & " shortURL=" & $UPLOADURL)
-	Else
-		_FileWriteLog($LOG, "Uploaded " & $FILENAME & ".png" & " via " & $SERVICE & " URL=" & $LINK & $FILENAME & ".png" & " shortURL=" & $UPLOADURL)
-	EndIf
+Func _Capture($box) ;Takes a picture of the selection and uploads
+	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "." & @MIN & "." & @SEC
+	DirCreate($DIR & $FILENAME)
+	_ScreenCapture_Capture($DIR & $FILENAME & "\" & $FILENAME & ".png", $box[0], $box[1], $box[0] + $box[2], $box[1] + $box[3], False)
+	_Upload()
 EndFunc
 
 Func _Select($action) ;Selection process to determine what to record/take picture of
-	$looping = 1
+	If GUICtrlRead($SVIDDEV) = "No compatible Video devices" Then
+		If MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR + $MB_YESNO, "Error", "No compatible DirectShow video devices were detected. Would you like to download one?") = $IDYES Then
+			GUISetState(@SW_HIDE, $SMAIN)
+			If _dShowDownload() <> 0 Then
+				MsgBox($MB_TOPMOST + $MB_OK, "Exiting", "Please restart GifT once you have completed the installation.")
+				Exit
+			EndIf
+		EndIf
+		_FileWriteLog($LOG, "No DirectShow video devices found.")
+		return -1
+	EndIf
 	If $SERVICE = "dropbox" And $UID <= 0 Then ;Check if UID is correctly set up
-		WinMove($bg, "", 0, 0, 0, 0)
-		MsgBox(0, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window.")
+		MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window.")
 		_FileWriteLog($LOG, "Error: UID value - " & $UID & " is not valid")
-		$looping = 0
+		return -1
 	ElseIf $SERVICE = "puush" And StringLen($PUSHKEY) <> 32 Then ;Check if API key is correctly set up
-		WinMove($bg, "", 0, 0, 0, 0)
-		MsgBox(0, "Error", "Unable to start capture due to API key value " & $PUSHKEY & @LF & "Please update your API key in the settings window.")
+		MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR, "Error", "Unable to start capture due to API key value " & $PUSHKEY & @LF & "Please update your API key in the settings window.")
 		_FileWriteLog($LOG, "Error: API key value - " & $PUSHKEY & " is not valid")
-		$looping = 0
+		return -1
+	ElseIf $SERVICE = "ftp" And Not _ftpCheck($SERVER, $USER, $PASS) Then ;Check if FTP info is valid, might be bad to check because there is a timeout delay if wrong
+		MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR, "Error", "Unable to establish FTP connection to: " & $SERVER & @LF & "Please check your FTP information in the settinigs window.")
+		_FileWriteLog($LOG, "Error: Unable to establish FTP connection to: " & $SERVER)
+		return -1
 	EndIf
 
-	HotKeySet($CANCKEY, "_Cancel") ;Disable hotkeys to prevent queued commands
-	HotKeySet($RECKEY)
-	HotKeySet($PICKEY)
+	DllCall($boxDll, "bool:cdecl", "setColor", "dword", $SELCOLOR, "byte", $LIGHT)
+	if @error Then ConsoleWrite("error: " & @error & @CRLF)
 
-	While $looping ;Until cancled (or return)
-		If _IsPressed("1") Then ;Mouse is pressed
-			$mp = MouseGetPos()
-			WinActivate($gif)
-			WinSetTrans($gif, "", $LIGHT)
+	Local $areaBox = DllCall($boxDll, "int*:cdecl", "getSelection")
+	if @error Then ConsoleWrite("error: " & @error & @CRLF)
 
-			While _IsPressed("01") ;While mouse is held down
-				$pos = MouseGetPos()
-				$lefts = _Order($mp[0], $pos[0])
-				$tops = _Order($mp[1], $pos[1])
-				_GUISetHole($bg, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1) ;Hole in the background
-				WinMove($gif, "", $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1) ;Selection rectangle
-				Sleep(50) ;Delay to prevent crashing
-				If $looping == 0 Then ;If canceled
-					TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
-					WinMove($bg, "", 0, 0, 0, 0)
-					_GUISetHole($bg, 0, 0, 0, 0)
-					WinMove($gif, "", 0, 0, 0, 0)
+	Local $arrStruct = DllStructCreate("int[4]", $areaBox[0])
+	Local $box[4]
 
-					HotKeySet($CANCKEY)
-					HotKeySet($RECKEY, "_Record")
-					HotKeySet($PICKEY, "_Picture")
-					return
-				EndIf
-			WEnd
-			GUISetCursor(-1, 0, $bg)
-			If $action = "r" Then ;If recording then you need an option to stop
-				HotKeySet($COMPKEY, "_Stop")
-			EndIf
+	For $i = 1 To 4
+		$box[$i - 1] = DllStructGetData($arrStruct, 1, $i)
+	Next
 
-			WinSetTrans($gif, "", 0)
-			_GUISetHole($bg, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
+	If $box[2] * $box[3] <> 0 Then ;If area of selection is not nothing
+		HotKeySet($RECKEY) ;Disable hotkeys to prevent queued commands
+		HotKeySet($PICKEY)
 
-			$square = SquareResize($lefts[0] - 3, $tops[0] - 3, $lefts[1] + 7, $tops[1] + 7, $square)
-			GUISetState(@SW_SHOW, $square)
-
-			Sleep(10)
-			If $action = "r" Then
-				_Capture($lefts[0], $tops[0], $lefts[1] + $lefts[0], $tops[1] + $tops[0])
-			ElseIf $action = "p" Then
-				WinMove($bg, "", 0, 0, 0, 0)
-				_GUISetHole($bg, 0, 0, 0, 0)
-				WinMove($gif, "", 0, 0, 0, 0)
-				GUISetState(@SW_HIDE, $square)
-
-				_takePicture($lefts[0], $tops[0], $lefts[1] + $lefts[0], $tops[1] + $tops[0])
-			EndIf
-			Return
+		If $action = "r" Then
+			HotKeySet($COMPKEY, $STOPFUNC) ;Need way to stop recording
+			HotKeySet($CANCKEY, $CANCFUNC) ;Need way to cancel recording
+			_Record($box)
+			$SQUARE = _FrameResize($SQUARE, $box[0] - 3, $box[1] - 3, $box[2] + 7, $box[3] + 7)
+			GUISetState(@SW_SHOW, $SQUARE)
+			;DllCall($dllhand, "none", "moveFrame", "int", 3)
+			;if @error Then ConsoleWrite("error: " & @error & @CRLF)
+		ElseIf $action = "p" Then
+			_Capture($box)
+			HotKeySet($RECKEY, $RECFUNC) ;ReEnable hotkeys (Might want to enable before upload is called but it wouldn't matter if upload called in different thread
+			HotKeySet($PICKEY, $PICFUNC) ;For recording reenable once recording is cancled or completed...
 		EndIf
-		Sleep(50)
-	WEnd
-
-	TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
-	WinMove($bg, "", 0, 0, 0, 0)
-	HotKeySet($CANCKEY)
-	HotKeySet($RECKEY, "_Record")
-	HotKeySet($PICKEY, "_Picture")
+	Else
+		TrayTip("Selection Canceled", "You have canceled the current selection.", 3, $TIP_ICONASTERISK)
+	EndIf
+	return
 EndFunc   ;==>_Select
 
 #region Clear Functions
 Func _Exit() ;Exits the program
 	_Stop()
-	If MsgBox(4, "Are you sure?", "Are you sure you want to quit?") == 6 Then
+	If MsgBox($MB_YESNO, "Are you sure?", "Are you sure you want to quit?") = $IDYES Then
 		_Splash(2000)
 		Exit
 	EndIf
 EndFunc   ;==>_Exit
 
-Func _Reset() ;Resets the screen
-	WinActivate($bg)
-	WinMove($bg, "", 0, 0, @DesktopWidth, @DesktopHeight)
-	GUISetCursor(3, 1, $bg)
-	_GUISetHole($bg, 0, 0, 0, 0)
-EndFunc   ;==>_Reset
-
-Func _Record() ; Reset + Begin record
-	_Reset()
+Func _Video() ; Begin record selection
 	_Select("r")
 EndFunc
 
-Func _Picture() ; Reset + Take picture
-	_Reset()
+Func _Picture() ; Begin picture selection
 	_Select("p")
 EndFunc
 
 Func _Stop() ;Stops the current recording and completes final steps
-	If $started == 1 Then
-		$started = 0
-		WinMove($bg, "", 0, 0, 0, 0)
-		_GUISetHole($bg, 0, 0, 0, 0)
-		WinMove($gif, "", 0, 0, 0, 0)
+	If $pid <> 0 Then
 		GUISetState(@SW_HIDE, $square)
+		StdinWrite($pid, 'q')
+		$pid = 0
+
 		HotKeySet($COMPKEY)
 		HotKeySet($CANCKEY)
-
-		$theFiles = _getFiles($dir & $FILENAME & "\")
-
-		If $GIFTYPE <> 0 Then
-			$theFiles = _ConvertFiles($theFiles, $dir & $FILENAME & "\")
-		EndIf
-
-		If $service = "dropbox" Then
-			_convert($theFiles, $path, $FPS, $GIFTPATH & "Gif.exe")
-			If _dropboxCheck() = -1 Then
-				If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
-					DirRemove($dir & $FILENAME, 1)
-				EndIf
-				If GUICtrlRead($SSAVE) == $GUI_CHECKED Then
-					FileCopy($path & $FILENAME & ".gif", $GIFSPATH & $FILENAME & ".gif", 8)
-				EndIf
-				Exit
-			EndIf
-
-			$UPLOADURL = _shortURL($LINK & $FILENAME & ".gif")
-			If GUICtrlRead($SSAVE) == $GUI_CHECKED Then
-				FileCopy($path & $FILENAME & ".gif", $GIFSPATH & $FILENAME & ".gif", 8)
-			EndIf
-			If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
-				DirRemove($dir & $FILENAME, 1)
-			EndIf
-			While Not StringInStr(_GetTrayText("Dropbox"), "Up to date")
-				Sleep(500)
-			WEnd
-		Else
-			_convert($theFiles, $GIFTPATH, $FPS, $GIFTPATH & "Gif.exe")
-			If $service = "imgur" Then
-				$ERRCHECK = _imgurUpload($GIFTPATH & $FILENAME & ".gif")
-			ElseIf $service = "puush" Then
-				$ERRCHECK = _puushUpload($GIFTPATH & $FILENAME & ".gif", $PUSHKEY)
-			EndIf
-
-			If $ERRCHECK == -1 Then
-				;MsgBox(0, "Error", "There seems to have been an error with uploading")
-				TrayTip("Upload Failed", "There was an error.", 5, 1)
-				If GUICtrlRead($SSAVE) == $GUI_CHECKED Then
-					FileCopy($GIFTPATH & $FILENAME & ".gif", $GIFSPATH & $FILENAME & ".gif", 8)
-				EndIf
-				FileDelete($GIFTPATH & $FILENAME & ".gif")
-				If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
-					DirRemove($dir & $FILENAME, 1)
-				EndIf
-				HotKeySet($RECKEY, "_Record")
-				HotKeySet($PICKEY, "_Picture")
-				return
-			EndIf
-			$UPLOADURL = _shortURL($ERRCHECK)
-			If GUICtrlRead($SSAVE) == $GUI_CHECKED Then
-				FileCopy($GIFTPATH & $FILENAME & ".gif", $GIFSPATH & $FILENAME & ".gif", 8)
-			EndIf
-			FileDelete($GIFTPATH & $FILENAME & ".gif")
-			If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
-				DirRemove($dir & $FILENAME, 1)
-			EndIf
-		EndIf
-
-		If GUICtrlRead($SSOUND) == $GUI_CHECKED Then
-			SoundPlay($GIFTPATH & "beep.mp3")
-		EndIf
-		TrayTip("Upload Complete", $UPLOADURL, 5, 1)
-		If GUICtrlRead($SCOPY) == $GUI_CHECKED Then
-			ClipPut($UPLOADURL)
-		EndIf
-		If GUICtrlRead($SOPEN) == $GUI_CHECKED Then
-			ShellExecute($UPLOADURL, "", "", "open")
-		EndIf
-		HotKeySet($RECKEY, "_Record")
-		HotKeySet($PICKEY, "_Picture")
-
-		If $SERVICE <> "dropbox" Then
-			_FileWriteLog($LOG, "Uploaded " & $FILENAME & ".gif" & " via " & $SERVICE & " URL=" & $ERRCHECK & " shortURL=" & $UPLOADURL)
-		Else
-			_FileWriteLog($LOG, "Uploaded " & $FILENAME & ".gif" & " via " & $SERVICE & " URL=" & $LINK & $FILENAME & ".gif" & " shortURL=" & $UPLOADURL)
-		EndIf
+		_Upload(1)
+		HotKeySet($RECKEY, $RECFUNC)
+		HotKeySet($PICKEY, $PICFUNC)
 	EndIf
 EndFunc   ;==>_Stop
 
 Func _Cancel() ;Cancels the current recording and deletes files
-	If $started == 1 Then
-		WinMove($bg, "", 0, 0, 0, 0)
-		_GUISetHole($bg, 0, 0, 0, 0)
-		WinMove($gif, "", 0, 0, 0, 0)
+	If $pid <> 0 Then
 		GUISetState(@SW_HIDE, $square)
+		StdinWrite($pid, 'q')
+		$pid = 0
+
 		HotKeySet($COMPKEY)
 		HotKeySet($CANCKEY)
-		HotKeySet($RECKEY, "_Record")
-		HotKeySet($PICKEY, "_Picture")
-		DirRemove($dir & $FILENAME, 1)
-		TrayTip("Recording Canceled", "The recording has been canceled, and the temporary files have been deleted.", 1, 1)
-		_FileWriteLog($LOG, "Recording canceled and temporary files have been removed from: " & $dir & $FILENAME)
-		$started = 0
-	EndIf
+		HotKeySet($RECKEY, $RECFUNC)
+		HotKeySet($PICKEY, $PICFUNC)
 
-	$looping = 0
+		DirRemove($DIR & $FILENAME, 1)
+		TrayTip("Recording Canceled", "The recording has been canceled, and the temporary files have been deleted.", 3, $TIP_ICONASTERISK)
+		_FileWriteLog($LOG, "Recording canceled and temporary files have been removed from: " & $DIR & $FILENAME)
+	EndIf
 EndFunc
 #endregion Clear Functions
 
 #region Helper Functions
-Func _getFiles($dir, $type = $GIFTYPE) ;Gets list of files from $dir (Local directory)
-	Local $ret = ""
-	If $type == 0 Then
-		$EXT = ".gif"
-	Else
-		$EXT = ".png"
-	EndIf
+Func _dShowDownload()
+	Local $dShowGUI = GUICreate("UScreenCapture Download", 205, 65, -1, -1, -1, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+	Local $dShow32 = GUICtrlCreateButton("UScreenCapture (x86)", 5, 5, 140, 25)
+	Local $dShow32m = GUICtrlCreateButton("Mirror", 150, 5, 50, 25)
+	Local $dShow64 = GUICtrlCreateButton("UScreenCapture (x64)", 5, 35, 140, 25)
+	Local $dShow64m = GUICtrlCreateButton("Mirror", 150, 35, 50, 25)
 
-	Local $FileList = _FileListToArray($dir, "*" & $EXT, 1)
-	If @error = 1 Then
-		MsgBox(0, "", "No Folders Found.")
-		_FileWriteLog($LOG, "No folders found in: " & $dir)
-		Exit
-	EndIf
-	If @error = 4 Then
-		MsgBox(0, "", "No Files Found.")
-		_FileWriteLog($LOG, "No files found in: " & $dir)
-		Exit
-	EndIf
-	If $type <> 0 Then
-		Return $FileList
-	EndIf
-	For $i = 1 To $FileList[0] Step 1
-		$ret &= $dir & $FileList[$i] & "|"
-	Next
-	Return $ret
-EndFunc   ;==>_getFiles
-
-Func _setKeys($button, $str) ;Sets hotkey buttons with key sequence string
-	Dim $keys = StringSplit($str, " ")
-	$ret = _convertHotkey($keys[1])
-	If $keys[0] > 1 Then
-		$ret &= " + " & _convertHotkey($keys[2])
-	EndIf
-	If $keys[0] > 2 Then
-		$ret &= " + " & _convertHotkey($keys[3])
-	EndIf
-	GUICtrlSetData($button, $ret)
-	return $ret
-EndFunc
-
-Func _selectKey($BUTTON) ;GUI for selecting hotkey
-	$keys = StringSplit(GUICtrlRead($BUTTON), " + ", 1)
-	GUISetState(@SW_SHOW, $SHOTKEY)
-	GUICtrlSendMsg($SKEY3, 0x14D, 1, $keys[$keys[0]])
-	If $keys[0] >= 2 Then
-		GUICtrlSendMsg($SKEY2, 0x14D, 1, $keys[$keys[0] - 1])
-		If $keys[0] >= 3 Then
-			GUICtrlSendMsg($SKEY1, 0x14D, 1, $keys[$keys[0] - 2])
-		Else
-			GUICtrlSendMsg($SKEY1, 0x14D, 1, "NONE")
-		EndIf
-	Else
-		GUICtrlSendMsg($SKEY1, 0x14D, 1, "NONE")
-		GUICtrlSendMsg($SKEY2, 0x14D, 1, "NONE")
-	EndIf
+	GUISetState(@SW_SHOW, $dShowGUI)
 
 	While 1
-		$MSG = GUIGetMsg()
-		Switch $MSG
+		Switch GUIGetMsg()
+			Case $GUI_EVENT_CLOSE
+				GUIDelete($dShowGUI)
+				Return 0
 
-		Case $GUI_EVENT_CLOSE
-			$str = ""
-			If GUICtrlRead($SKEY1) <> "NONE" Then
-				$str &= GUICtrlRead($SKEY1) & " + "
-			EndIf
-			If GUICtrlRead($SKEY2) <> "NONE" Then
-				$str &= GUICtrlRead($SKEY2) & " + "
-			EndIf
-			$str &= GUICtrlRead($SKEY3)
+			Case $dShow32
+				ShellExecute("http://www.umediaserver.net/bin/UScreenCapture.zip", "", "", "open")
+				GUIDelete($dShowGUI)
+				Return 1
 
-			GUISetState(@SW_HIDE, $SHOTKEY)
-			GUISetState(@SW_SHOW, $SMAIN)
-			return $str
-		EndSwitch
-	WEnd
-EndFunc   ;==>_selectKey
+			Case $dShow32m
+				ShellExecute("http://rasu.us/GifT/UScreenCapture_(x86).msi", "", "", "open")
+				GUIDelete($dShowGUI)
+				Return 1
 
-Func _GifEdit()
-	While 1
-		$MSG = GUIGetMsg()
-		Switch $MSG
+			Case $dShow64
+				ShellExecute("http://www.umediaserver.net/bin/UScreenCapture(x64).zip", "", "", "open")
+				GUIDelete($dShowGUI)
+				Return 1
 
-				Case $GUI_EVENT_CLOSE
-				GUISetState(@SW_HIDE, $EMAIN)
-				return -1
-
-			Case $EBROWSE
-				$EFOLD = FileSelectFolder("Choose a folder.", "C:\GifT\Local\")
-				If $EFOLD <> "" Then
-					GUICtrlSetData($EPATH, $EFOLD & "\")
-				EndIf
-
-			Case $ELOAD
-				$EGIFFILE = _FileListToArray(GUICtrlRead($EPATH), "*.gif")
-				If $EGIFFILE <> 0 Then
-					$EMAXF = $EGIFFILE[0]
-					GUICtrlSetLimit($ESLIDE, $EMAXF, 1)
-					;_ArrayDisplay($EGIFFILE)
-					_GDIPlus_Startup()
-					For $i = 1 To $EMAXF Step 1
-						$EGIFFILE[$i] = _GDIPlus_BitmapCreateFromFile(GUICtrlRead($EPATH) & $EGIFFILE[$i])
-					Next
-					;$EIMG = _GDIPlus_BitmapCreateFromFile(GUICtrlRead($EPATH) & $EGIFFILE[1])
-					$EIMGH = _GDIPlus_ImageGetHeight($EGIFFILE[1])
-					$EIMGW = _GDIPlus_ImageGetWidth($EGIFFILE[1])
-					If $EIMGW < 555 Then
-						$EIMGW = 554
-					EndIf
-					WinMove($EMAIN, "", Default, Default, 600 + $EIMGW - 555, 510 + $EIMGH - 345)
-					$EGRAPHIC = _GDIPlus_GraphicsCreateFromHWND($EMAIN)
-					_GDIPlus_GraphicsDrawImage($EGRAPHIC, $EGIFFILE[1], 20, 54)
-					GUICtrlSetData($EFMAX, "/ " & $EMAXF)
-					$ECURF = 1
-
-					GUICtrlSetState($EINSERT, $GUI_ENABLE)
-					If $EMAXF > 1 Then
-						GUICtrlSetState($ESLIDE, $GUI_ENABLE)
-						GUICtrlSetState($EPREVF, $GUI_ENABLE)
-						GUICtrlSetState($ENEXTF, $GUI_ENABLE)
-						GUICtrlSetState($EREMOVE, $GUI_ENABLE)
-						GUICtrlSetState($EPLAY, $GUI_ENABLE)
-					EndIf
-					GUICtrlSetState($ESAVE, $GUI_ENABLE)
-					GUICtrlSetData($ESLIDE, $ECURF)
-				Else
-					MsgBox(0, "Error", "No .gif files found.")
-				EndIf
-
-			Case $ENEXTF
-				If $ECURF = $EMAXF Then
-					$ECURF = 1
-				Else
-					$ECURF += 1
-				EndIf
-				GUICtrlSetData($ESLIDE, $ECURF)
-				_DrawPic($EGRAPHIC, $EGIFFILE[$ECURF])
-				GUICtrlSetData($EFCUR, $ECURF)
-
-			Case $EPREVF
-				If $ECURF = 1 Then
-					$ECURF = $EMAXF
-				Else
-					$ECURF -= 1
-				EndIf
-				GUICtrlSetData($ESLIDE, $ECURF)
-				_DrawPic($EGRAPHIC, $EGIFFILE[$ECURF])
-				GUICtrlSetData($EFCUR, $ECURF)
-
-			Case $EINSERT
-				MsgBox(0, "Ops", "This doesnt even work")
-
-			Case $EREMOVE
-				GUICtrlSetState($EREMOVE, $GUI_DISABLE)
-				If MsgBox(4, "Are you sure?", "Are you sure you want to remove this frame?") = 6 Then
-					_GDIPlus_BitmapDispose($EGIFFILE[$ECURF])
-					If $ECURF = $EMAXF Then
-						$ECURF -= 1
-					Else
-						For $i = $ECURF To $EMAXF - 1 Step 1
-							$EGIFFILE[$i] = $EGIFFILE[$i + 1]
-						Next
-					EndIf
-					$EMAXF -= 1
-					_DrawPic($EGRAPHIC, $EGIFFILE[$ECURF])
-					GUICtrlSetData($EFCUR, $ECURF)
-					GUICtrlSetData($EFMAX, "/ " & $EMAXF)
-					GUICtrlSetLimit($ESLIDE, $EMAXF)
-				EndIf
-				GUICtrlSetState($EREMOVE, $GUI_ENABLE)
-				If $EMAXF = 1 Then
-					GUICtrlSetState($EREMOVE, $GUI_DISABLE)
-				EndIf
-				GUICtrlSetLimit($ESLIDE, $EMAXF, 1)
-
-			Case $EPLAY
-				$EDELAY = 1000 / GUICtrlRead($EFPS)
-				GUICtrlSetState($ESLIDE, $GUI_DISABLE)
-				GUICtrlSetState($EPREVF, $GUI_DISABLE)
-				GUICtrlSetState($ENEXTF, $GUI_DISABLE)
-				GUICtrlSetState($EINSERT, $GUI_DISABLE)
-				GUICtrlSetState($EREMOVE, $GUI_DISABLE)
-				GUICtrlSetState($EPLAY, $GUI_DISABLE)
-				GUICtrlSetState($ESAVE, $GUI_DISABLE)
-
-				For $i = $ECURF To $EMAXF Step 1
-					_DrawPic($EGRAPHIC, $EGIFFILE[$i])
-					GUICtrlSetData($EFCUR, $i)
-					Sleep($EDELAY - 25)
-				Next
-				Sleep(1000)
-				_DrawPic($EGRAPHIC, $EGIFFILE[$ECURF])
-				GUICtrlSetData($EFCUR, $ECURF)
-
-				GUICtrlSetState($ESLIDE, $GUI_ENABLE)
-				GUICtrlSetState($EPREVF, $GUI_ENABLE)
-				GUICtrlSetState($ENEXTF, $GUI_ENABLE)
-				GUICtrlSetState($EINSERT, $GUI_ENABLE)
-				GUICtrlSetState($EREMOVE, $GUI_ENABLE)
-				GUICtrlSetState($EPLAY, $GUI_ENABLE)
-				GUICtrlSetState($ESAVE, $GUI_ENABLE)
-
-			Case $ESAVE
-				GUISetState(@SW_HIDE, $EMAIN)
-				;MsgBox(0, "", GUICtrlRead($EPATH))
-				$theFiles = _GetFiles(GUICtrlRead($EPATH), 0) ;The 0 means Gif
-				_convert($theFiles, $GIFTPATH, 1000 / GUICtrlRead($EFPS), $GIFTPATH & "Gif.exe")
-				;MsgBox(0, "", "do not work")
-				MsgBox(0, "Saved", "File Located: " & $GIFTPATH)
-				return 1
+			Case $dShow64m
+				ShellExecute("http://rasu.us/GifT/UScreenCapture_(x64).msi", "", "", "open")
+				GUIDelete($dShowGUI)
+				Return 1
 
 		EndSwitch
-		$ESTAT = GUICtrlRead($ESLIDE)
-		If $ESTAT <> $ESLIDEH Then
-			$ECURF = $ESTAT
-			_DrawPic($EGRAPHIC, $EGIFFILE[$ECURF])
-			GUICtrlSetData($EFCUR, $ECURF)
-			$ESLIDEH = $ECURF
-		EndIf
-		Sleep(20)
 	WEnd
 EndFunc
 
-Func _GetTrayText($sToolTipTitle) ;Gets text of tray tip
-	; Find systray handle
-	Local $hSysTray_Handle = ControlGetHandle("[Class:Shell_TrayWnd]", "", "[Class:ToolbarWindow32;Instance:1]")
-	If @error Then
-		_FileWriteLog($LOG, "System tray not found")
-		Exit
+Func _GUICtrlEdit_GetCueBanner($hWnd)
+	If Not IsHWnd($hWnd) Then
+		$hWnd = GUICtrlGetHandle($hWnd)
 	EndIf
 
-	; Get systray item count
-	Local $iSystray_ButCount = _GUICtrlToolbar_ButtonCount($hSysTray_Handle)
-	If $iSystray_ButCount = 0 Then
-		_FileWriteLog($LOG, "No items found in system tray")
-		Exit
+	Local $tText = DllStructCreate("wchar[4096]")
+	If _SendMessage($hWnd, $EM_GETCUEBANNER, $tText, 4096, 0, "struct*") <> 1 Then
+		Return SetError(-1, 0, "")
+	EndIf
+	Return _WinAPI_WideCharToMultiByte($tText)
+EndFunc   ;==>_GUICtrlEdit_GetCueBanner
+
+Func _GUICtrlEdit_SetCueBanner($hWnd, $sText)
+	If Not IsHWnd($hWnd) Then
+		$hWnd = GUICtrlGetHandle($hWnd)
 	EndIf
 
-	; Look for wanted tooltip
-	Local $iSystray_ButtonNumber
-	For $iSystray_ButtonNumber = 0 To $iSystray_ButCount - 1
-		Local $sText = _GUICtrlToolbar_GetButtonText($hSysTray_Handle, $iSystray_ButtonNumber)
-		If StringInStr($sText, $sToolTipTitle) = 1 Then Return $sText
-	Next
+	Local $tText = _WinAPI_MultiByteToWideChar($sText)
 
-	Return SetError(1, 0, "")
-EndFunc   ;==>_GetTrayText
-
-Func _Order($a, $b) ;Orders $a and $b from least to greatest
-	Dim $res[2]
-	If $a < $b Then
-		$res[0] = $a
-		$res[1] = $b - $a
-	Else
-		$res[0] = $b
-		$res[1] = $a - $b
-	EndIf
-	Return $res
-EndFunc   ;==>_Order
-
-Func _imgurUpload($path, $key = "f77d0b8cd41eb62792be0bf303e649df") ;Uploads to imgur
-	Local $stdoutr = "", $output = ""
-	$run = $CURL & " -F image=@" & $path & " -F key=" & $key & " --retry 2 --location-trusted --url http://api.imgur.com/2/upload.xml"
-	$PID = Run($run, "", @SW_HIDE, $STDERR_CHILD + $STDOUT_CHILD)
-
-	While $output = ""
-		$stdoutr = StdoutRead($PID)
-		If Not @error And $stdoutr <> "" Then
-			$output &= $stdoutr & @CRLF
-		EndIf
-	WEnd
-
-	Local $piclink = StringRegExp($output, "http://i.imgur.com/[^<]*", 3)
-	If Not @error Then
-		return $piclink[0]
-	Else
-		$array = StringRegExp($output, "<message>(.*?)</message>", 2)
-		MsgBox(262144 + 4096 + 16, "Error", $array[1])
-		_FileWriteLog($LOG, "Imgur Upload ERROR: " & $array[1])
-		return -1
-	EndIf
-EndFunc
-
-Func _puushUpload($path, $key) ;Uploads to puush
-	Local $stdoutr = "", $output = ""
-
-	$run = $CURL & " -F k=" & $key & " -F z=poop -F f=@" & $path & " --retry 2 --location-trusted --url http://puush.me/api/up"
-	$PID = Run($run, "", @SW_HIDE, $STDERR_CHILD + $STDOUT_CHILD)
-
-	While $output = ""
-		$output = StdoutRead($PID)
-		Sleep(20)
-	WEnd
-	Local $piclink = StringSplit($output, ",")
-	If Not @error Then
-
-		return StringReplace(StringReplace($piclink[2], ".gif", ""), ".png", "")
-	Else
-		MsgBox(0, "", $output)
-		MsgBox(262144 + 4096 + 16, "Error", "Sorry, an error occured", 4)
-		_FileWriteLog($LOG, "Puush Upload ERROR: " & $output)
-		return -1
-	EndIf
-EndFunc
-
-Func _dropboxCheck() ;Checks that dropbox is fully functioning and ready to be used
-	If $SERVICE = "dropbox" Then
-		If Not FileExists(@HomeDrive & "\Users\" & @UserName & "\Dropbox\") Then
-			If MsgBox(262148, "Error", "You do not seem to have Dropbox installed.  Would you like to install?" & @LF & @LF & "Expected path: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\") == 6 Then
-				ShellExecute("https://www.dropbox.com/downloading", "", "", "open")
-				MsgBox(262144, "Notice", "Please try again once you have completed the install process.")
-			EndIf
-			_FileWriteLog($LOG, "Dropbox not installed on computer")
-			return -1
-		ElseIf Not FileExists(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\") Then
-			If MsgBox(262148, "Error", "A public Dropbox folder was not detected.  You will need one enabled in order to upload files. Would you like to enable it?" & @LF & @LF & "Expected path: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\") == 6 Then
-				ShellExecute("https://www.dropbox.com/enable_public_folder", "", "", "open")
-				MsgBox(262144, "Notice", "You must run GifT again once you have created your public folder.")
-			Else
-				MsgBox(262144, "Notice", "If you already have a public Dropbox folder, please change its location to: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-			EndIf
-			_FileWriteLog($LOG, "Public Dropbox folder not detected")
-			return -1
-		ElseIf Not ProcessExists("Dropbox.exe") Then
-			MsgBox(262144, "Error", "Dropbox is not running.  You must run dropbox in order to upload files")
-			_FileWriteLog($LOG, "Dropbox is not running")
-			return -1
-		Else
-			If _GetTrayText("Dropbox") == "" Then
-				MsgBox(262144, "Error", "Unable to find Dropbox tray icon. Please set it to 'Show icon and notifications'" & @LF & @LF & @TAB & "Control Panel -> Notification Area Icons")
-				_FileWriteLog($LOG, "Unable to find Dropbox tray icon")
-				return -1
-			EndIf
-		EndIf
-	EndIf
-	return 1
-EndFunc
+	Return _SendMessage($hWnd, $EM_SETCUEBANNER, False, $tText, 0, "wparam", "struct*") = 1
+EndFunc   ;==>_GUICtrlEdit_SetCueBanner
 #endregion Helper Functions
-
-#region Conversion Functions
-Func _convert($file, $output, $delay, $path) ;Animates a list of .gif using Gif.exe
-	Run($path, "", @SW_HIDE)
-	$hWnd = WinWait("Gif Creator", "")
-	_FileDragDrop($hWnd, $file)
-	ControlSetText($hWnd, "", "[CLASS:Edit; INSTANCE:1]", $output)
-	ControlSetText($hWnd, "", "[CLASS:Edit; INSTANCE:2]", $delay)
-	ControlClick($hWnd, "", "[CLASS:Button; INSTANCE:1]")
-	WinWaitClose($hWnd)
-EndFunc   ;==>_convert
-
-Func _convertFiles($files, $dir, $type = 1) ;Converts .png to .gif (better quality)
-	_FreeImage_LoadDLL($GIFTPATH & "FreeImage.dll")
-	_FreeImage_Initialise()
-
-	For $i = 1 To $files[0] Step 1
-		$hImage = _FreeImage_LoadU($FIF_PNG, $dir & $files[$i])
-		$hBmp = _FreeImage_ConvertTo24Bits($hImage)
-		$hGif = _FreeImage_ColorQuantizeEx($hBmp, $GIFTYPE - 1)
-
-		_FreeImage_SaveU($FIF_GIF, $hGif, $dir & StringReplace($files[$i], ".png", ".gif"))
-		_FreeImage_Unload($hImage)
-		_FreeImage_Unload($hBmp)
-		_FreeImage_Unload($hGif)
-	Next
-	FileDelete($dir & "*.png")
-	_FreeImage_DeInitialise()
-
-	return _getFiles($dir, 0)
-EndFunc    ;==>_convertFiles
-
-Func _convertHotkey($key) ;converts hotkey from actual to string form
-	If $key = "!" Then
-		return "ALT"
-	ElseIf $key = "+" Then
-		return "CTRL"
-	ElseIf $key = "^" Then
-		return "SHIFT"
-	ElseIf $key = "#" Then
-		return "WIN"
-	Else
-		return StringUpper(StringReplace(StringReplace($key, "{", ""), "}", ""))
-	EndIf
-EndFunc
-
-Func _shortURL($url) ;shortens URL
-	If $SHORTEN = "waa.ai" Then
-		Return BinaryToString(InetRead("http://api.waa.ai/?url=" & $url))
-	ElseIf $SHORTEN = "bit.ly" Then
-		Return BinaryToString(InetRead("http://api.bit.ly/v3/shorten?login=giftupload&apiKey=R_026342ffc376b66dc50460a5634fe2ec&longUrl=" & $url & "&format=txt"))
-	Else
-		return $url
-	EndIf
-EndFunc   ;==>_shortURL
-#endregion
 
 #region Updates
 Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
+	_GUICtrlComboBox_SelectString($SAUDDEV, IniRead($INIPATH, "settings", "audio", GUICtrlRead($SAUDDEV)))
+	_GUICtrlComboBox_SelectString($SVIDDEV, IniRead($INIPATH, "settings", "video", GUICtrlRead($SVIDDEV)))
+	GUICtrlSetData($SDIRPATH, IniRead($INIPATH, "settings", "dirpath", $DIR))
 	GUICtrlSetData($SDROPPATH, IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\"))
-	GUICtrlSetData($SGIFSPATH, IniRead($INIPATH, "settings", "gifspath", $GIFTPATH & "Gifs\"))
-	GUICtrlSetData($SPICSPATH, IniRead($INIPATH, "settings", "picspath", $GIFTPATH & "Pictures\"))
-	GUICtrlSetData($SUID, IniRead($INIPATH, "settings", "uid", "0"))
-	GUICtrlSetData($SAPI, IniRead($INIPATH, "settings", "pushkey", "0"))
-	GUICtrlSetData($SFPS, IniRead($INIPATH, "settings", "fps", "5"))
-	GUICtrlSetData($SBACKOP, IniRead($INIPATH, "settings", "backop", "200"))
-	GUICtrlSetData($SSELOP, IniRead($INIPATH, "settings", "selop", "50"))
+	GUICtrlSetData($SUID, IniRead($INIPATH, "settings", "uid", ""))
+	GUICtrlSetData($SAPI, IniRead($INIPATH, "settings", "pushkey", ""))
+	GUICtrlSetData($SSELOP, IniRead($INIPATH, "settings", "selop", 50))
+	GUICtrlSetData($SFTPSERVER, IniRead($INIPATH, "settings", "ftpserver", ""))
+	GUICtrlSetData($SFTPUSER, IniRead($INIPATH, "settings", "ftpuser", ""))
+	GUICtrlSetData($SFTPPASS, IniRead($INIPATH, "settings", "ftppass", ""))
 
 	GUICtrlSetState($SCOPY, IniRead($INIPATH, "settings", "copy", $GUI_CHECKED))
 	GUICtrlSetState($SOPEN, IniRead($INIPATH, "settings", "open", $GUI_UNCHECKED))
-	GUICtrlSetState($SPICS, IniRead($INIPATH, "settings", "savepic", $GUI_UNCHECKED))
-	GUICtrlSetState($SDELETE, IniRead($INIPATH, "settings", "delete", $GUI_UNCHECKED))
-	GUICtrlSetState($SSOUND, IniRead($INIPATH, "settings", "sound", $GUI_CHECKED))
-	GUICtrlSetState($SMOUSE, IniRead($INIPATH, "settings", "mouse", $GUI_CHECKED))
 	GUICtrlSetState($SSAVE, IniRead($INIPATH, "settings", "save", $GUI_UNCHECKED))
+	GUICtrlSetState($SDELETE, IniRead($INIPATH, "settings", "delete", $GUI_CHECKED))
+	GUICtrlSetState($SSOUND, IniRead($INIPATH, "settings", "sound", $GUI_CHECKED))
+	GUICtrlSetState($SMUTE, IniRead($INIPATH, "settings", "mute", $GUI_UNCHECKED))
 	GUICtrlSetState($SUPDATE, IniRead($INIPATH, "settings", "update", $GUI_CHECKED))
 
-	_setKeys($SRECORD, IniRead($INIPATH, "settings", "recordkey", "+ ^ v"))
-	_setKeys($SPICTURE, IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"))
+	_setKeys($SRECORD, IniRead($INIPATH, "settings", "recordkey", "+ ^ r"))
+	_setKeys($SPICTURE, IniRead($INIPATH, "settings", "picturekey", "+ ^ e"))
 	_setKeys($SCOMPLETE, IniRead($INIPATH, "settings", "completekey", "{F4}"))
-	_setKeys($SCANCEL, IniRead($INIPATH, "settings", "cancelkey", "{ESC}"))
 
-	If GUICtrlRead($SRECORD) = "CTRL + SHIFT + V" Then
-		GUICtrlSetState($SRECDF, $GUI_DISABLE)
-	EndIf
-	If GUICtrlRead($SPICTURE) = "CTRL + SHIFT + 4" Then
-		GUICtrlSetState($SPICDF, $GUI_DISABLE)
-	EndIf
-	If GUICtrlRead($SCOMPLETE) = "F4" Then
-		GUICtrlSetState($SCOMPDF, $GUI_DISABLE)
-	EndIf
-	If GUICtrlRead($SCANCEL) = "ESC" Then
-		GUICtrlSetState($SCANCDF, $GUI_DISABLE)
-	EndIf
+	GUICtrlSetState($SAUDDEV, GUICtrlRead($SMUTE) = $GUI_UNCHECKED ? $GUI_ENABLE : $GUI_DISABLE)
 
-	$temp = IniRead($INIPATH, "settings", "shorten", "waa.ai")
+	GUICtrlSetState($SRECDF, GUICtrlRead($SRECORD) = "CTRL + SHIFT + R" ? $GUI_DISABLE : $GUI_ENABLE)
+	GUICtrlSetState($SPICDF, GUICtrlRead($SPICTURE) = "CTRL + SHIFT + E" ? $GUI_DISABLE : $GUI_ENABLE)
+	GUICtrlSetState($SCOMPDF, GUICtrlRead($SCOMPLETE) = "F4" ? $GUI_DISABLE : $GUI_ENBALE)
+
+	Local $temp = IniRead($INIPATH, "settings", "shorten", "none")
 	If $temp = "bit.ly" Then
 		GUICtrlSetState($SBITLY, $GUI_CHECKED)
 	ElseIf $temp = "none" Then
@@ -1202,6 +703,8 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 		GUICtrlSetState($SDROPBOX, $GUI_CHECKED)
 	ElseIf $temp = "puush" Then
 		GUICtrlSetState($SPUUSH, $GUI_CHECKED)
+	ElseIf $temp = "ftp" Then
+		GUICtrlSetState($SFTP, $GUI_CHECKED)
 	Else
 		GUICtrlSetState($SIMGUR, $GUI_CHECKED)
 	EndIf
@@ -1216,119 +719,25 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 	EndIf
 EndFunc   ;==>_loadIni
 
-Func _updateGUI() ;Sets the color and opacity of the GUIs
-	GUISetBkColor($BGCOLOR, $bg)
-	GUISetBkColor($SELCOLOR, $gif)
-
-	WinSetTrans($bg, "", $DARK)
-	WinSetTrans($gif, "", 0)
-EndFunc   ;==>_updateGUI
-
-Func _updateIni() ;Writes new values to .ini file
-	If GUICtrlRead($SBACKOP) > 255 Then
-		GUICtrlSetData($SBACKOP, 255)
-	EndIf
-	If GUICtrlRead($SBACKOP) < 0 Then
-		GUICtrlSetData($SBACKOP, 0)
-	EndIf
-	If GUICtrlRead($SSELOP) > 255 Then
-		GUICtrlSetData($SSELOP, 255)
-	EndIf
-	If GUICtrlRead($SSELOP) < 0 Then
-		GUICtrlSetData($SSELOP, 0)
-	EndIf
-	If GUICtrlRead($SFPS) > 20 Then
-		GUICtrlSetData($SFPS, 20)
-	EndIf
-	If GUICtrlRead($SFPS) < 1 Then
-		GUICtrlSetData($SFPS, 1)
-	EndIf
-	If Not FileExists(GUICtrlRead($SDROPPATH)) Then
-		GUICtrlSetData($SDROPPATH, @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-	EndIf
-	If Not FileExists(GUICtrlRead($SGIFSPATH)) Then
-		GUICtrlSetData($SGIFSPATH, $GIFTPATH & "Gifs\")
-	EndIf
-	If Not FileExists(GUICtrlRead($SPICSPATH)) Then
-		GUICtrlSetData($SPICSPATH, $GIFTPATH & "Pictures\")
-	EndIf
-
-	IniWrite($INIPATH, "settings", "droppath", GUICtrlRead($SDROPPATH))
-	IniWrite($INIPATH, "settings", "gifspath", GUICtrlRead($SGIFSPATH))
-	IniWrite($INIPATH, "settings", "picspath", GUICtrlRead($SPICSPATH))
-	IniWrite($INIPATH, "settings", "uid", GUICtrlRead($SUID))
-	IniWrite($INIPATH, "settings", "pushkey", GUICtrlRead($SAPI))
-	IniWrite($INIPATH, "settings", "fps", GUICtrlRead($SFPS))
-	IniWrite($INIPATH, "settings", "backop", GUICtrlRead($SBACKOP))
-	IniWrite($INIPATH, "settings", "selop", GUICtrlRead($SSELOP))
-	IniWrite($INIPATH, "settings", "backcol", _GUIColorPicker_GetColor($SBACKCOL))
-	IniWrite($INIPATH, "settings", "selcol", _GUIColorPicker_GetColor($SSELCOL))
-	IniWrite($INIPATH, "settings", "boxcol", _GUIColorPicker_GetColor($SBOXCOL))
-
-	IniWrite($INIPATH, "settings", "copy", GUICtrlRead($SCOPY))
-	IniWrite($INIPATH, "settings", "open", GUICtrlRead($SOPEN))
-	IniWrite($INIPATH, "settings", "savepic", GUICtrlRead($SPICS))
-	IniWrite($INIPATH, "settings", "delete", GUICtrlRead($SDELETE))
-	IniWrite($INIPATH, "settings", "sound", GUICtrlRead($SSOUND))
-	IniWrite($INIPATH, "settings", "mouse", GUICtrlRead($SMOUSE))
-	IniWrite($INIPATH, "settings", "save", GUICtrlRead($SSAVE))
-	IniWrite($INIPATH, "settings", "update", GUICtrlRead($SUPDATE))
-
-	_updateHotkey(StringSplit(GUICtrlRead($SRECORD), " + ", 1), "recordkey")
-	_updateHotkey(StringSplit(GUICtrlRead($SPICTURE), " + ", 1), "picturekey")
-	_updateHotkey(StringSplit(GUICtrlRead($SCOMPLETE), " + ", 1), "completekey")
-	_updateHotkey(StringSplit(GUICtrlRead($SCANCEL), " + ", 1), "cancelkey")
-EndFunc   ;==>_updateIni
-
 Func _updateVar() ;Updates variable values based on .ini file
 	$PATH 		= IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-	$PICSPATH	= IniRead($INIPATH, "settings", "picspath", $GIFTPATH & "Pictures\")
-	$GIFSPATH	= IniRead($INIPATH, "settings", "gifspath", $GIFTPATH & "Gifs\")
 	$UID 		= IniRead($INIPATH, "settings", "uid", 0)
 	$LINK 		= "https://dl.dropboxusercontent.com/u/" & $UID & "/"
 	$PUSHKEY 	= IniRead($INIPATH, "settings", "pushkey", 0)
-	$FPS 		= Round(100 / IniRead($INIPATH, "settings", "fps", 5)) * 10
-	$DARK 		= IniRead($INIPATH, "settings", "backop", 200)
 	$LIGHT 		= IniRead($INIPATH, "settings", "selop", 50)
-	$BGCOLOR 	= IniRead($INIPATH, "settings", "backcol", 0)
-	$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", 255)
-	$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", 65280)
-	$MOUSE 		= $GUI_CHECKED == IniRead($INIPATH, "settings", "mouse", $GUI_CHECKED)
+	$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", 52479)
+	$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", 16711680)
 	HotKeySet($RECKEY)
-	$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ v"), " ", "")
-	HotKeySet($RECKEY, "_Record")
+	$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ r"), " ", "")
+	HotKeySet($RECKEY, $RECFUNC)
 	HotKeySet($PICKEY)
-	$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"), " ", "")
-	HotKeySet($PICKEY, "_Picture")
+	$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ e"), " ", "")
+	HotKeySet($PICKEY, $PICFUNC)
 	$COMPKEY 	= StringReplace(IniRead($INIPATH, "settings", "completekey", "{F4}"), " ", "")
-	$CANCKEY 	= StringReplace(IniRead($INIPATH, "settings", "cancelkey", "{ESC}"), " ", "")
+	$SERVER 	= IniRead($INIPATH, "settings", "ftpserver", "")
+	$USER 		= IniRead($INIPATH, "settings", "ftpuser", "")
+	$PASS 		= IniRead($INIPATH, "settings", "ftppass", "")
 EndFunc   ;==>_updateVar
-
-Func _updateHotkey($keys, $name) ;Whites new hotkeys to .ini file
-	$str = ""
-	For $i = 1 To $keys[0] Step 1
-		If $keys[$i] = "ALT" Then
-			$str &= "! "
-		ElseIf $keys[$i] = "CTRL" Then
-			$str &= "+ "
-		ElseIf $keys[$i] = "SHIFT" Then
-			$str &= "^ "
-		ElseIf $keys[$i] = "WIN" Then
-			$str &= "# "
-		Else
-			If StringLen($keys[$i]) == 1 Then
-				$str &= StringLower($keys[$i])
-			Else
-				$str &= "{" & $keys[$i] & "}"
-			EndIf
-		EndIf
-	Next
-	IniWrite($INIPATH, "settings", $name, $str)
-EndFunc
-
-Func _DrawPic($Graphic, $Bitmap)
-	_GDIPlus_GraphicsDrawImage($Graphic, $Bitmap, 20, 54)
-EndFunc
 #endregion Updates
 
 #region Splash Image
@@ -1336,12 +745,12 @@ Func _Splash($d = -1) ;Begins the splash image
 	_GDIPlus_Startup()
 	; Load PNG image
 	$hImage = _GDIPlus_ImageLoadFromFile($GIFTPATH & "GifT.png")
-	$iWidth = _GDIPlus_ImageGetWidth($hImage)
-	$iHeight = _GDIPlus_ImageGetHeight($hImage)
+	Local $iWidth = _GDIPlus_ImageGetWidth($hImage)
+	Local $iHeight = _GDIPlus_ImageGetHeight($hImage)
 
 	; Create GUI
 	$hGUI = GUICreate("", $iWidth, $iHeight, -1, -1, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST + $WS_EX_TOOLWINDOW)
-	$hGUI_child = GUICreate("", $iWidth, $iHeight, 0, 0, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST + $WS_EX_MDICHILD, $hGUI)
+	Local $hGUI_child = GUICreate("", $iWidth, $iHeight, 0, 0, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST + $WS_EX_MDICHILD, $hGUI)
 	GUISetBkColor(0xFFFFFF, $hGUI_child)
 	GUISetState(@SW_SHOW, $hGUI)
 	GUISetState(@SW_SHOW, $hGUI_child)
@@ -1387,35 +796,9 @@ Func SetTransparentBitmap($hGUI, $hImage, $iOpacity = 0xFF) ;Used for transparen
 EndFunc   ;==>SetTransparentBitmap
 #endregion Splash Image
 
-Func _Files() ;Additional files that are needed to run the program
-	DirCreate($GIFTPATH & "Gifs\")
-	DirCreate($GIFTPATH & "Local\")
-	DirCreate($GIFTPATH & "Pictures\")
-	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\Gif.exe", $GIFTPATH & "Gif.exe") ;Converts list of files into an animated gif
-	If $check == 0 Then
-		FileCopy(@ScriptDir & "Gif.exe", $GIFTPATH & "Gif.exe")
-	EndIf
-	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\GifT.png", $GIFTPATH & "GifT.png") ;Logo image
-	If $check == 0 Then
-		FileCopy(@ScriptDir & "Gif.png", $GIFTPATH & "Gif.png")
-	EndIf
-	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\beep.mp3", $GIFTPATH & "beep.mp3") ;Sound alert on successful upload
-	If $check == 0 Then
-		FileCopy(@ScriptDir & "beep.mp3", $GIFTPATH & "beep.mp3")
-	EndIf
-	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\curl.exe", $GIFTPATH & "curl.exe") ;used for uploading files
-	If $check == 0 Then
-		FileCopy(@ScriptDir & "curl.exe", $GIFTPATH & "curl.exe")
-	EndIf
-	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\FreeImage.dll", $GIFTPATH & "FreeImage.dll") ;used for converting files
-	If $check == 0 Then
-		FileCopy(@ScriptDir & "FreeImage.dll", $GIFTPATH & "FreeImage.dll")
-	EndIf
-EndFunc   ;==>_Files
-
 #region Square GUI
 Func _GUISetHole($hWin, $l, $t, $w, $h) ;Creates a hole in the gui
-	Local $aWinPos, $Outer_Rgn, $Inner_Rgn, $Wh, $Combined_Rgn
+	Local $aWinPos, $Outer_Rgn, $Inner_Rgn, $Combined_Rgn
 	$aWinPos = WinGetPos($hWin)
 
 	$Outer_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", 0, "long", 0, "long", $aWinPos[2], "long", $aWinPos[3])
@@ -1425,15 +808,15 @@ Func _GUISetHole($hWin, $l, $t, $w, $h) ;Creates a hole in the gui
 	DllCall("user32.dll", "long", "SetWindowRgn", "hwnd", $hWin, "long", $Combined_Rgn[0], "int", 1)
 EndFunc   ;==>_GUISetHole
 
-Func GUICreateSquare($l, $t, $w, $h, $c = 0x00FF00, $thickness = 3) ;Creates a square GUI with a hole
-	$squareGUI = GUICreate("", $w, $h, $l, $t, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+Func GUICreateFrame($l, $t, $w, $h, $c = 0x00FF00, $thickness = 3) ;Creates a square GUI with a hole
+	Local $frame = GUICreate("", $w, $h, $l, $t, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 	GUISetBkColor($c)
-	_GUISetHole($squareGUI, $thickness, $thickness, $w - 2 * $thickness, $h - 2 * $thickness)
-	Return $squareGUI
-EndFunc   ;==>GUICreateSquare
+	_GUISetHole($frame, $thickness, $thickness, $w - 2 * $thickness, $h - 2 * $thickness)
+	Return $frame
+EndFunc   ;==>GUICreateFrame
 
-Func SquareResize($l, $t, $w, $h, $square) ;Deletes and remakes a square GUI
-	GUIDelete($square)
-	Return GUICreateSquare($l, $t, $w, $h, $BOXCOLOR, 3)
-EndFunc   ;==>SquareResize
+Func _FrameResize($frame, $l, $t, $w, $h, $thickness = 3) ;Reposition a frame GUI
+	GUIDelete($frame)
+	return GUICreateFrame($l, $t, $w, $h, $BOXCOLOR, $thickness)
+EndFunc   ;==>Frame resize
 #endRegion
