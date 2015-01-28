@@ -38,7 +38,7 @@ If _dropboxCheck() == -1 Then
 	Exit
 EndIf
 
-$VERSION = 7
+$VERSION = 8
 $NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 If $NEWVERSION > $VERSION Then
 	$enable = MsgBox(262148, "Update", "New version of GifT available.  Would you like to download?")
@@ -62,6 +62,7 @@ $CURL 		= $GIFTPATH & "curl.exe"
 $PATH 		= IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
 $DIR 		= IniRead($INIPATH, "settings", "savepath", $GIFTPATH)
 $UID 		= IniRead($INIPATH, "settings", "uid", "0")
+$PUSHKEY	= IniRead($INIPATH, "settings", "pushkey", "0")
 $LINK 		= "https://dl.dropboxusercontent.com/u/" & $UID & "/"
 $FPS 		= Round(100 / IniRead($INIPATH, "settings", "fps", "5")) * 10
 $DARK 		= IniRead($INIPATH, "settings", "backop", "200")
@@ -84,6 +85,7 @@ $stop 		= 0
 
 #region GUI stuff?
 HotKeySet($RECKEY, "_Record")
+HotKeySet($PICKEY, "_Picture")
 Opt("TrayMenuMode", 3) ; Default tray menu items (Script Paused/Exit) will not be shown. and no checkmarks
 
 $TSETTINGS = TrayCreateItem("Settings")
@@ -108,20 +110,22 @@ GUISetState(@SW_SHOW, $gif)
 #region Settings Window
 $SMAIN = GUICreate("GifT Settings", 386, 235, -1, -1, $WS_SYSMENU)
 $STABS = GUICtrlCreateTab(7, 7, 367, 195)
-;GUISetBkColor(0xFFFFFF, $STABS)
 
 GUICtrlCreateTabItem("General")
-$SCOPY = GUICtrlCreateCheckbox(" Copy link to clipboard", 19, 125, 120, 20)
-$SOPEN = GUICtrlCreateCheckbox(" Open link in browser", 19, 150, 115, 20)
-$SDELETE = GUICtrlCreateCheckbox(" Delete local files after conversion", 19, 175, 175, 20)
-$SSOUND = GUICtrlCreateCheckbox(" Play notification sound", 215, 125, 125, 20)
-$SMOUSE = GUICtrlCreateCheckbox(" Capture screen with mouse", 215, 150, 150, 20)
-$SSAVE = GUICtrlCreateCheckbox(" Save gif file locally", 215, 175, 110, 20)
+$SCOPY = GUICtrlCreateCheckbox(" Copy link to clipboard", 19, 100, 120, 20)
+$SOPEN = GUICtrlCreateCheckbox(" Open link in browser", 19, 125, 115, 20)
+$SDELETE = GUICtrlCreateCheckbox(" Delete local files after conversion", 19, 150, 175, 20)
+$SSOUND = GUICtrlCreateCheckbox(" Play notification sound", 215, 100, 125, 20)
+$SMOUSE = GUICtrlCreateCheckbox(" Capture screen with mouse", 215, 125, 150, 20)
+$SSAVE = GUICtrlCreateCheckbox(" Save gif file locally", 215, 150, 110, 20)
+$SUPDATE = GUICtrlCreateCheckbox(" Check for updates", 19, 175, 120, 20)
 
-$SUID = GUICtrlCreateInput(113843502, 90, 35, 65, 22, $ES_NUMBER)
-$SFPS = GUICtrlCreateInput(5, 45, 60, 30, 22, $ES_NUMBER)
-GUICtrlCreateLabel("Dropbox UID:", 15, 39, 70, 20)
-GUICtrlCreateLabel("FPS:", 15, 64, 25, 20)
+$SAPI = GUICtrlCreateInput(0, 100, 35, 260, 22)
+$SUID = GUICtrlCreateInput(0, 100, 65, 65, 22, $ES_NUMBER)
+$SFPS = GUICtrlCreateInput(5, 305, 65, 55, 22, $ES_NUMBER)
+GUICtrlCreateLabel("Puush API Key:", 15, 39,90, 20)
+GUICtrlCreateLabel("Dropbox UID:", 15, 69, 70, 20)
+GUICtrlCreateLabel("Frames per Second:", 195, 69, 100, 20)
 
 GUICtrlSetLimit($SFPS, 2)
 
@@ -176,8 +180,9 @@ $SNSHORT = GUICtrlCreateRadio("None", 245, 55, 70, 20)
 GUICtrlCreateGroup("Image Hosters", 15, 90, 350, 50)
 GUIStartGroup()
 $SIMGUR = GUICtrlCreateRadio("imgur", 25, 110, 70, 20)
-$SDROPBOX = GUICtrlCreateRadio("dropbox", 135, 110, 70, 20)
-GUICtrlCreateLabel("- Imgur has a file limit of 2MB", 15, 175, 200, 20)
+$SPUUSH = GUICtrlCreateRadio("puush", 135, 110, 70, 20)
+$SDROPBOX = GUICtrlCreateRadio("dropbox", 245, 110, 70, 20)
+GUICtrlCreateLabel("- Imgur has a file limit of 1MB", 15, 175, 200, 20)
 
 $SHOTKEY = GUICreate("Set Hotkey", 250, 80, -1, -1, $WS_SYSMENU, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 
@@ -188,7 +193,6 @@ GUICtrlSetData($SKEY1, "ALT|CTRL|SHIFT|WIN", "NONE")
 GUICtrlSetData($SKEY2, "ALT|CTRL|SHIFT|WIN", "NONE")
 GUICtrlSetData($SKEY3, "1|2|3|4|5|6|7|8|9|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|F1|F2|F3|F4|F5|F6|F7|F8|F9|F10|F11|ESC", "0")
 
-GUICtrlSetState($SPICTURE, $GUI_DISABLE)
 #endregion Settings Window
 
 #region Load information
@@ -208,7 +212,7 @@ While 1 ;Program Loop
 			_Exit()
 
 		Case $TMSG = $TABOUT
-			MsgBox(64, "About: GifT", "GIF recorder and uploader via Dropbox.com" & @LF & "with bitly.com as the URL shortener" & @LF & @LF & "Coded in Autoit")
+			MsgBox(64, "About: GifT", "GIF recorder and uploader via Imgur/Puush/Dropbox" & @LF & "with waa.ai/bit.ly as the URL shortener" & @LF & @LF & "Coded in Autoit")
 
 		Case $TMSG = $TSETTINGS
 			;Open Settings Window
@@ -258,12 +262,10 @@ While 1 ;Program Loop
 			GUICtrlSetData($SCANCEL, _selectKey($SCANCEL))
 
 		Case $SWAAAI, $SBITLY, $SNSHORT
-			MsgBox(0, "", $MSG)
 			$SHORTEN = GUICtrlRead($MSG, 1)
-			MsgBox(0, "", $SHORTEN)
 			IniWrite($INIPATH, "settings", "shorten", $SHORTEN)
 
-		Case $SIMGUR, $SDROPBOX
+		Case $SIMGUR, $SPUUSH, $SDROPBOX
 			$SERVICE = GUICtrlRead($MSG, 1)
 			IniWrite($INIPATH, "settings", "service", $SERVICE)
 	EndSwitch
@@ -276,25 +278,75 @@ Func _Capture($l, $t, $w, $h) ;Takes pictures of the desktop until stopped
 	DirCreate($dir & $FILENAME)
 	Sleep(200)
 	$time = timerInit()
-	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & ".gif", $l, $t, $w + $l, $h + $t, $MOUSE)
+	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & ".gif", $l, $t, $w, $h, $MOUSE)
 	For $i = 1000 To 9999
 		While TimerDiff($time) < $FPS
 			Sleep(10)
 		WEnd
 		$time = timerInit()
-		_ScreenCapture_Capture($dir & $FILENAME & "\~" & $i & ".gif", $l, $t, $w + $l, $h + $t, $MOUSE)
+		_ScreenCapture_Capture($dir & $FILENAME & "\~" & $i & ".gif", $l, $t, $w, $h, $MOUSE)
 		If $started == 0 Then
 			Return
 		EndIf
 	Next
 EndFunc   ;==>_Capture
 
+Func _takePicture($l, $t, $w, $h)
+	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & Mod(@HOUR, 12) & "." & @MIN & "." & @SEC
+	_ScreenCapture_Capture($GIFTPATH & "Pictures\" & $FILENAME & ".png", $l, $t, $w, $h, $MOUSE)
+	If $service = "dropbox" Then
+		If _dropboxCheck() = -1 Then
+			If GUICtrlRead($SDELETE) == 1 Then
+				FileDelete($GIFTPATH & "Pictures\" & $FILENAME & ".png")
+			EndIf
+			Exit
+		EndIf
+		FileCopy($GIFTPATH & "Pictures\" & $FILENAME & ".png", $path & $FILENAME & ".png")
+		$UPLOADURL = _shortURL($LINK & $FILENAME & ".png")
+		While Not StringInStr(_GetTrayText("Dropbox"), "Up to date")
+			Sleep(100)
+		WEnd
+	Else
+		If $service = "imgur" Then
+			$ERRCHECK = _imgurUpload($GIFTPATH & "Pictures\" & $FILENAME & ".png")
+		ElseIf $service = "puush" Then
+			$ERRCHECK = _puushUpload($GIFTPATH & "Pictures\" & $FILENAME & ".png", $PUSHKEY)
+		EndIf
+		If $ERRCHECK == -1 Then
+			MsgBox(0, "Error", "There seems to have been an error with uploading")
+			TrayTip("Upload Failed", "There was an error.", 5, 1)
+			return
+		EndIf
+		$UPLOADURL = _shortURL($ERRCHECK)
+	EndIf
+
+	If GUICtrlRead($SDELETE) == 1 Then
+		FileDelete($GIFTPATH & "Pictures\" & $FILENAME & ".png")
+	EndIf
+
+	If GUICtrlRead($SSOUND) == 1 Then
+		SoundPlay($GIFTPATH & "beep.mp3")
+	EndIf
+
+	TrayTip("Upload Complete", $UPLOADURL, 5, 1)
+
+	If GUICtrlRead($SCOPY) == 1 Then
+		ClipPut($UPLOADURL)
+	EndIf
+	If GUICtrlRead($SOPEN) == 1 Then
+		ShellExecute($UPLOADURL, "", "", "open")
+	EndIf
+EndFunc
+
 Func _Select($action = "r") ;Selection process to determine what to record
 	While 1
 		If _IsPressed("1") Then
-			HotKeySet($COMPKEY, "_Stop")
-			HotKeySet($CANCKEY, "_Cancel")
-			HotKeySet($RECKEY)
+			If $action = "r" Then
+				HotKeySet($COMPKEY, "_Stop")
+				HotKeySet($CANCKEY, "_Cancel")
+				HotKeySet($RECKEY)
+				HotKeySet($PICKEY)
+			EndIf
 			$mp = MouseGetPos()
 			WinSetTrans($gif, "", $LIGHT)
 			While _IsPressed("01")
@@ -315,11 +367,16 @@ Func _Select($action = "r") ;Selection process to determine what to record
 			GUISetState(@SW_SHOW, $square)
 
 			Sleep(10)
-			If $SERVICE = "imgur" Or $UID > 0 Then
+			If $SERVICE <> "dropbox" Or $UID > 0 Then
 				If $action = "r" Then
-					_Capture($lefts[0], $tops[0], $lefts[1], $tops[1])
+					_Capture($lefts[0], $tops[0], $lefts[1] + $lefts[0], $tops[1] + $tops[0])
 				ElseIf $action = "p" Then
-					_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & ".png", $lefts[0], $tops[0], $lefts[1] + $lefts[0], $tops[1] + $tops[0], $MOUSE)
+					WinMove($up, "", 0, 0, 0, 0)
+					_GUISetHole($up, 0, 0, 0, 0)
+					WinMove($gif, "", 0, 0, 0, 0)
+					GUISetState(@SW_HIDE, $square)
+
+					_takePicture($lefts[0], $tops[0], $lefts[1] + $lefts[0], $tops[1] + $tops[0])
 				EndIf
 			Else
 				WinMove($up, "", 0, 0, 0, 0)
@@ -361,6 +418,7 @@ EndFunc
 
 Func _Stop() ;Stops the current recording and completes final steps
 	If $started == 1 Then
+		$started = 0
 		WinMove($up, "", 0, 0, 0, 0)
 		_GUISetHole($up, 0, 0, 0, 0)
 		WinMove($gif, "", 0, 0, 0, 0)
@@ -371,16 +429,13 @@ Func _Stop() ;Stops the current recording and completes final steps
 
 		If $service = "dropbox" Then
 			_convert($theFiles, $path, $FPS, $GIFTPATH & "Gif.exe")
-			If _GetTrayText("Dropbox") == "" Then
-				MsgBox(0, "Error", "Dropbox is not running.  You must run dropbox in order to upload files.")
-				MsgBox(0, "Exit", "GifT will now close.")
+			If _dropboxCheck() = -1 Then
 				If GUICtrlRead($SDELETE) == 1 Then
 					DirRemove($dir & $FILENAME, 1)
 				EndIf
 				If GUICtrlRead($SSAVE) == 1 Then
 					FileCopy($path & $FILENAME & ".gif", $GIFTPATH & "Gifs\" & $FILENAME & ".gif", 8)
 				EndIf
-				_Splash(2000)
 				Exit
 			EndIf
 
@@ -394,12 +449,19 @@ Func _Stop() ;Stops the current recording and completes final steps
 			While Not StringInStr(_GetTrayText("Dropbox"), "Up to date")
 				Sleep(500)
 			WEnd
-		ElseIf $service = "imgur" Then
+		Else
 			_convert($theFiles, $GIFTPATH, $FPS, $GIFTPATH & "Gif.exe")
-			$ERRCHECK = _imgurUpload($GIFTPATH & $FILENAME & ".gif")
+			If $service = "imgur" Then
+				$ERRCHECK = _imgurUpload($GIFTPATH & $FILENAME & ".gif")
+			ElseIf $service = "puush" Then
+				$ERRCHECK = _puushUpload($GIFTPATH & $FILENAME & ".gif", $PUSHKEY)
+			EndIf
+
 			If $ERRCHECK == -1 Then
 				MsgBox(0, "Error", "There seems to have been an error with uploading")
 				TrayTip("Upload Failed", "There was an error.", 5, 1)
+				HotKeySet($RECKEY, "_Record")
+				HotKeySet($PICKEY, "_Picture")
 				return
 			EndIf
 			$UPLOADURL = _shortURL($ERRCHECK)
@@ -416,14 +478,14 @@ Func _Stop() ;Stops the current recording and completes final steps
 			SoundPlay($GIFTPATH & "beep.mp3")
 		EndIf
 		TrayTip("Upload Complete", $UPLOADURL, 5, 1)
-		HotKeySet($RECKEY, "_Record")
 		If GUICtrlRead($SCOPY) == 1 Then
 			ClipPut($UPLOADURL)
 		EndIf
 		If GUICtrlRead($SOPEN) == 1 Then
 			ShellExecute($UPLOADURL, "", "", "open")
 		EndIf
-		$started = 0
+		HotKeySet($RECKEY, "_Record")
+		HotKeySet($PICKEY, "_Picture")
 	EndIf
 EndFunc   ;==>_Stop
 
@@ -433,9 +495,10 @@ Func _Cancel() ;Cancels the current recording and deletes files
 		_GUISetHole($up, 0, 0, 0, 0)
 		WinMove($gif, "", 0, 0, 0, 0)
 		GUISetState(@SW_HIDE, $square)
-		HotKeySet("{F4}")
-		HotKeySet("{ESC}")
-
+		HotKeySet($COMPKEY)
+		HotKeySet($CANCKEY)
+		HotKeySet($RECKEY, "_Record")
+		HotKeySet($PICKEY, "_Picture")
 		DirRemove($dir & $FILENAME, 1)
 		TrayTip("Recording Canceled", "The recording has been canceled, and the temporary files have been deleted.", 5, 1)
 		$started = 0
@@ -548,9 +611,9 @@ Func _Order($a, $b) ;Orders $a and $b from least to greatest
 	Return $res
 EndFunc   ;==>_Order
 
-Func _imgurUpload($path);, $key = "f77d0b8cd41eb62792be0bf303e649df")
+Func _imgurUpload($path, $key = "f77d0b8cd41eb62792be0bf303e649df")
 	Local $stdoutr = "", $output = ""
-	$run = $CURL & ' -F image=@"' & $path & '" -F key=f77d0b8cd41eb62792be0bf303e649df --retry 2 --location-trusted --url "http://api.imgur.com/2/upload.xml"'
+	$run = $CURL & " -F image=@" & $path & " -F key=" & $key & " --retry 2 --location-trusted --url http://api.imgur.com/2/upload.xml"
 	$PID = Run($run, "", @SW_HIDE, $STDERR_CHILD + $STDOUT_CHILD)
 
 	While $output = ""
@@ -562,7 +625,6 @@ Func _imgurUpload($path);, $key = "f77d0b8cd41eb62792be0bf303e649df")
 
 	Local $piclink = StringRegExp($output, "http://i.imgur.com/[^<]*", 3)
 	If Not @error Then
-		;SoundPlay(@WindowsDir & "\media\Speech On.wav")
 		return $piclink[0]
 	Else
 		Select
@@ -570,42 +632,35 @@ Func _imgurUpload($path);, $key = "f77d0b8cd41eb62792be0bf303e649df")
 				MsgBox(262144 + 4096 + 16, "Error", "Authentication is required !", 4)
 			Case StringInStr($output, "No image data was sent")
 				MsgBox(262144 + 4096 + 16, "Error", "No image data was sent !", 4)
-			Case StringInStr($output, "<error_code>1000")
-				MsgBox(262144 + 4096 + 16, "Error", "No image selected !", 4)
-			Case StringInStr($output, "<error_code>1001")
-				MsgBox(262144 + 4096 + 16, "Error", "Image failed to upload !", 4)
-			Case StringInStr($output, "<error_code>1002")
-				MsgBox(262144 + 4096 + 16, "Error", "Image larger than 10 MB !", 4)
-			Case StringInStr($output, "<error_code>1003")
-				MsgBox(262144 + 4096 + 16, "Error", "Invalid image type or URL !", 4)
 			Case StringInStr($output, "Invalid API Key")
 				MsgBox(262144 + 4096 + 16, "Error", "Invalid API Key !", 4)
-			Case StringInStr($output, "<error_code>1005")
-				MsgBox(262144 + 4096 + 16, "Error", "Upload failed during process !", 4)
-			Case StringInStr($output, "<error_code>1006")
-				MsgBox(262144 + 4096 + 16, "Error", "Upload failed during the copy process !", 4)
-			Case StringInStr($output, "<error_code>1007")
-				MsgBox(262144 + 4096 + 16, "Error", "Upload failed during thumbnail process !", 4)
-			Case StringInStr($output, "<error_code>1008")
-				MsgBox(262144 + 4096 + 16, "Error", "Upload limit reached !", 4)
-			Case StringInStr($output, "<error_code>1009")
-				MsgBox(262144 + 4096 + 16, "Error", "Animated GIF is larger than 2MB !", 4)
-			Case StringInStr($output, "<error_code>1010")
-				MsgBox(262144 + 4096 + 16, "Error", "Animated PNG is larger than 2MB !", 4)
-			Case StringInStr($output, "<error_code>1011")
-				MsgBox(262144 + 4096 + 16, "Error", "Invalid URL !", 4)
-			Case StringInStr($output, "<error_code>1012")
-				MsgBox(262144 + 4096 + 16, "Error", "Could not download the image from that URL !", 4)
-			Case StringInStr($output, "<error_code>9000")
-				MsgBox(262144 + 4096 + 16, "Error", "Invalid API request !", 4)
-			Case StringInStr($output, "<error_code>9001")
-				MsgBox(262144 + 4096 + 16, "Error", "Invalid response format !", 4)
-			Case StringInStr($output, "Request Entity Too Large")
-				MsgBox(262144 + 4096 + 16, "Error", "The file is too big to upload to imgur.  Please use dropbox instead.", 4)
+			Case StringInStr($output, "No API key was sent,")
+				MsgBox(262144 + 4096 + 16, "Error", "The file is too big to upload to imgur.  Please use dropbox or puush instead.", 4)
 			Case Else
 				MsgBox(0, "", $output)
 				MsgBox(262144 + 4096 + 16, "Error", "Sorry, an error occured", 4)
 		EndSelect
+		return -1
+	EndIf
+EndFunc
+
+Func _puushUpload($path, $key = "E66E58E82203C1184928C812C483B580")
+	Local $stdoutr = "", $output = ""
+
+	$run = $CURL & " -F k=" & $key & " -F z=poop -F f=@" & $path & " --retry 2 --location-trusted --url http://puush.me/api/up"
+	$PID = Run($run, "", @SW_HIDE, $STDERR_CHILD + $STDOUT_CHILD)
+
+	While $output = ""
+		$output = StdoutRead($PID)
+		Sleep(20)
+	WEnd
+	Local $piclink = StringSplit($output, ",")
+	If Not @error Then
+		;MsgBox(0, "", $piclink[2])
+		return $piclink[2]
+	Else
+		MsgBox(0, "", $output)
+		MsgBox(262144 + 4096 + 16, "Error", "Sorry, an error occured", 4)
 		return -1
 	EndIf
 EndFunc
@@ -682,6 +737,7 @@ Func _loadIni() ;Loads .ini file and sets data to controls
 	GUICtrlSetData($SDROPPATH, IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\"))
 	GUICtrlSetData($SSAVEPATH, IniRead($INIPATH, "settings", "savepath", $GIFTPATH & "Local\"))
 	GUICtrlSetData($SUID, IniRead($INIPATH, "settings", "uid", "0"))
+	GUICtrlSetData($SAPI, IniRead($INIPATH, "settings", "pushkey", "0"))
 	GUICtrlSetData($SFPS, IniRead($INIPATH, "settings", "fps", "5"))
 	GUICtrlSetData($SBACKOP, IniRead($INIPATH, "settings", "backop", "200"))
 	GUICtrlSetData($SSELOP, IniRead($INIPATH, "settings", "selop", "50"))
@@ -710,6 +766,8 @@ Func _loadIni() ;Loads .ini file and sets data to controls
 	$temp = IniRead($INIPATH, "settings", "service", "imgur")
 	If $temp = "dropbox" Then
 		GUICtrlSetState($SDROPBOX, $GUI_CHECKED)
+	ElseIf $temp = "puush" Then
+		GUICtrlSetState($SPUUSH, $GUI_CHECKED)
 	Else
 		GUICtrlSetState($SIMGUR, $GUI_CHECKED)
 	EndIf
@@ -753,6 +811,7 @@ Func _updateIni() ;Writes new values to .ini file
 	IniWrite($INIPATH, "settings", "droppath", GUICtrlRead($SDROPPATH))
 	IniWrite($INIPATH, "settings", "savepath", GUICtrlRead($SSAVEPATH))
 	IniWrite($INIPATH, "settings", "uid", GUICtrlRead($SUID))
+	IniWrite($INIPATH, "settings", "pushkey", GUICtrlRead($SAPI))
 	IniWrite($INIPATH, "settings", "fps", GUICtrlRead($SFPS))
 	IniWrite($INIPATH, "settings", "backop", GUICtrlRead($SBACKOP))
 	IniWrite($INIPATH, "settings", "selop", GUICtrlRead($SSELOP))
@@ -774,24 +833,26 @@ Func _updateIni() ;Writes new values to .ini file
 EndFunc   ;==>_updateIni
 
 Func _updateVar() ;Updates variable values based on .ini file
-	$PATH = IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-	$DIR = IniRead($INIPATH, "settings", "savepath", $GIFTPATH)
-	$UID = IniRead($INIPATH, "settings", "uid", "0")
-	$LINK = "https://dl.dropboxusercontent.com/u/" & $UID & "/"
-	$FPS = Round(100 / IniRead($INIPATH, "settings", "fps", "5")) * 10
-	$DARK = IniRead($INIPATH, "settings", "backop", "200")
-	$LIGHT = IniRead($INIPATH, "settings", "selop", "50")
-	$BGCOLOR = IniRead($INIPATH, "settings", "backcol", "0")
-	$SELCOLOR = IniRead($INIPATH, "settings", "selcol", "255")
-	$BOXCOLOR = IniRead($INIPATH, "settings", "boxcol", "65280")
-	$MOUSE = 1 == IniRead($INIPATH, "settings", "mouse", "1")
+	$PATH 		= IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
+	$DIR 		= IniRead($INIPATH, "settings", "savepath", $GIFTPATH)
+	$UID 		= IniRead($INIPATH, "settings", "uid", "0")
+	$PUSHKEY 	= IniRead($INIPATH, "settings", "pushkey", "0")
+	$LINK 		= "https://dl.dropboxusercontent.com/u/" & $UID & "/"
+	$FPS 		= Round(100 / IniRead($INIPATH, "settings", "fps", "5")) * 10
+	$DARK 		= IniRead($INIPATH, "settings", "backop", "200")
+	$LIGHT 		= IniRead($INIPATH, "settings", "selop", "50")
+	$BGCOLOR 	= IniRead($INIPATH, "settings", "backcol", "0")
+	$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", "255")
+	$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", "65280")
+	$MOUSE 		= 1 == IniRead($INIPATH, "settings", "mouse", "1")
 	HotKeySet($RECKEY)
-	$RECKEY = StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ v"), " ", "")
+	$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ v"), " ", "")
 	HotKeySet($RECKEY, "_Record")
-	$PICKEY = StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"), " ", "")
-	$COMPKEY = StringReplace(IniRead($INIPATH, "settings", "completekey", "{F4}"), " ", "")
-	$CANCKEY = StringReplace(IniRead($INIPATH, "settings", "cancelkey", "{ESC}"), " ", "")
-
+	HotKeySet($PICKEY)
+	$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"), " ", "")
+	HotKeySet($PICKEY, "_Picture")
+	$COMPKEY 	= StringReplace(IniRead($INIPATH, "settings", "completekey", "{F4}"), " ", "")
+	$CANCKEY 	= StringReplace(IniRead($INIPATH, "settings", "cancelkey", "{ESC}"), " ", "")
 EndFunc   ;==>_updateVar
 
 Func _updateHotkey($keys, $name) ;Whites new hotkeys to .ini file
@@ -826,7 +887,7 @@ Func _Splash($d = -1) ;Begins the splash image
 	$iHeight = _GDIPlus_ImageGetHeight($hImage)
 
 	; Create GUI
-	$hGUI = GUICreate("Show PNG", $iWidth, $iHeight, -1, -1, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST)
+	$hGUI = GUICreate("", $iWidth, $iHeight, -1, -1, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST + $WS_EX_TOOLWINDOW)
 	$hGUI_child = GUICreate("", $iWidth, $iHeight, 0, 0, $WS_POPUP, $WS_EX_LAYERED + $WS_EX_TOPMOST + $WS_EX_MDICHILD, $hGUI)
 	GUISetBkColor(0xFFFFFF, $hGUI_child)
 	GUISetState(@SW_SHOW, $hGUI)
@@ -876,6 +937,7 @@ EndFunc   ;==>SetTransparentBitmap
 Func _Files() ;Additional files that are needed to run the program
 	DirCreate($GIFTPATH & "Gifs\")
 	DirCreate($GIFTPATH & "Local\")
+	DirCreate($GIFTPATH & "Pictures\")
 	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\Gif.exe", $GIFTPATH & "Gif.exe")
 	If $check == 0 Then
 		FileCopy(@ScriptDir & "Gif.exe", $GIFTPATH & "Gif.exe")
