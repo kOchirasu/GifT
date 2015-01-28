@@ -33,8 +33,7 @@ If _Singleton("GifT", 1) == 0 Then
 EndIf
 
 If _dropboxCheck() == -1 Then
-	MsgBox(0, "Revert", "Reverting to imgur service...")
-	_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
+	MsgBox(0, "Revert", "Reverting to imgur service...");	_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
 	IniWrite($INIPATH, "settings", "service", "imgur")
 	Exit
 EndIf
@@ -45,7 +44,7 @@ EndIf
 
 $LOG = FileOpen($LOGPATH, 1)
 
-$VERSION = 12
+$VERSION = 12.1
 If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
 	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 	If $NEWVERSION > $VERSION Then
@@ -107,13 +106,11 @@ $TEXIT 		= TrayCreateItem("Exit")
 
 TraySetState()
 
-$WHOLE 		= GUICreate("", @DesktopWidth, @DesktopHeight, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $BG 		= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $GIF 		= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $SQUARE 	= GUICreateSquare(0, 0, 0, 0, $BOXCOLOR)
 
-WinSetTrans($whole, "", 1)
-GUISetCursor(3, 1, $whole)
+GUISetCursor(3, 1, $gif)
 
 GUISetState(@SW_SHOW, $bg)
 GUISetState(@SW_SHOW, $gif)
@@ -443,12 +440,10 @@ EndFunc
 Func _Select($action) ;Selection process to determine what to record/take picture of
 	$looping = 1
 	If $SERVICE = "dropbox" And $UID <= 0 Then ;Check if UID is correctly set up
-		GUISetState(@SW_HIDE, $whole)
 		MsgBox(0, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window.")
 		_FileWriteLog($LOG, "Error: UID value - " & $UID & " is not valid")
 		$looping = 0
 	ElseIf $SERVICE = "puush" And StringLen($PUSHKEY) <> 32 Then ;Check if API key is correctly set up
-		GUISetState(@SW_HIDE, $whole)
 		MsgBox(0, "Error", "Unable to start capture due to API key value " & $PUSHKEY & @LF & "Please update your API key in the settings window.")
 		_FileWriteLog($LOG, "Error: API key value - " & $PUSHKEY & " is not valid")
 		$looping = 0
@@ -461,34 +456,33 @@ Func _Select($action) ;Selection process to determine what to record/take pictur
 	While $looping ;Until cancled (or return)
 		If _IsPressed("1") Then ;Mouse is pressed
 			$mp = MouseGetPos()
+			WinActivate($gif)
 			WinSetTrans($gif, "", $LIGHT)
+
 			While _IsPressed("01") ;While mouse is held down
 				$pos = MouseGetPos()
 				$lefts = _Order($mp[0], $pos[0])
 				$tops = _Order($mp[1], $pos[1])
-
 				_GUISetHole($bg, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1) ;Hole in the background
 				WinMove($gif, "", $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1) ;Selection rectangle
 				Sleep(50) ;Delay to prevent crashing
 				If $looping == 0 Then ;If canceled
+					TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
 					WinMove($bg, "", 0, 0, 0, 0)
 					_GUISetHole($bg, 0, 0, 0, 0)
-					GUISetState(@SW_HIDE, $whole)
 					WinMove($gif, "", 0, 0, 0, 0)
 
 					HotKeySet($CANCKEY)
 					HotKeySet($RECKEY, "_Record")
 					HotKeySet($PICKEY, "_Picture")
-					TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
 					return
 				EndIf
 			WEnd
-
+			GUISetCursor(-1, 0, $bg)
 			If $action = "r" Then ;If recording then you need an option to stop
 				HotKeySet($COMPKEY, "_Stop")
 			EndIf
 
-			GUISetState(@SW_HIDE, $whole) ;Hide the fullscreen gui that is only used for mouse cursor cross style
 			WinSetTrans($gif, "", 0)
 			_GUISetHole($bg, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
 
@@ -508,15 +502,14 @@ Func _Select($action) ;Selection process to determine what to record/take pictur
 			EndIf
 			Return
 		EndIf
-		Sleep(25)
+		Sleep(50)
 	WEnd
 
+	TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
 	WinMove($bg, "", 0, 0, 0, 0)
-	GUISetState(@SW_HIDE, $whole)
 	HotKeySet($CANCKEY)
 	HotKeySet($RECKEY, "_Record")
 	HotKeySet($PICKEY, "_Picture")
-	TrayTip("Selection Canceled", "You have canceled the current selection.", 1, 1)
 EndFunc   ;==>_Select
 
 #region Clear Functions
@@ -529,11 +522,10 @@ Func _Exit() ;Exits the program
 EndFunc   ;==>_Exit
 
 Func _Reset() ;Resets the screen
-	GUISetState(@SW_SHOW, $whole)
-	WinSetOnTop($whole, "", 1)
-	WinSetOnTop($bg, "", 1)
-	WinSetOnTop($gif, "", 1)
+	WinActivate($bg)
 	WinMove($bg, "", 0, 0, @DesktopWidth, @DesktopHeight)
+	GUISetCursor(3, 1, $bg)
+	_GUISetHole($bg, 0, 0, 0, 0)
 EndFunc   ;==>_Reset
 
 Func _Record() ; Reset + Begin record
@@ -934,7 +926,6 @@ EndFunc   ;==>_loadIni
 Func _updateGUI() ;Sets the color and opacity of the GUIs
 	GUISetBkColor($BGCOLOR, $bg)
 	GUISetBkColor($SELCOLOR, $gif)
-	GUISetBkColor($BGCOLOR, $whole)
 
 	WinSetTrans($bg, "", $DARK)
 	WinSetTrans($gif, "", 0)
