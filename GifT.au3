@@ -1,4 +1,7 @@
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=upload.ico
+#AutoIt3Wrapper_Run_AU3Check=n
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
 #region Include Files
 #include <GUIConstants.au3>
@@ -10,38 +13,57 @@
 #include <ScreenCapture.au3>
 #include <GDIPlus.au3>
 #include <File.au3>
-#include <IE.au3>
 #include <Misc.au3>
 #include "_ColorChooser.au3"
 #include "_ColorPicker.au3"
 #include "_FileDragDrop.au3"
 #endRegion
 
+Global $hImage, $hGraphic, $hGUI
 #region Error Check
 If _Singleton("GifT", 1) == 0 Then
 	MsgBox(0, "Error", "GifT is already running!")
 	Exit
 ElseIf Not FileExists(@HomeDrive & "\Users\" & @UserName & "\Dropbox\") Then
 	$enable = MsgBox(0, "Error", "You do not seem to have Dropbox installed.  Would you like to install?" & @LF & @LF & "Expected path: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\")
-	If $enable = 6 Then
+	If $enable == 6 Then
 		ShellExecute("https://www.dropbox.com/downloading", "", "", "open")
 		MsgBox(0, "Notice", "Please try again once you have completed the install process.")
 	EndIf
 	Exit
 ElseIf Not FileExists(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\") Then
 	$enable = MsgBox(4, "Error", "A public Dropbox folder was not detected.  You will need one enabled in order to upload files. Would you like to enable it?" & @LF & @LF & "Expected path: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-	If $enable = 6 Then
+	If $enable == 6 Then
 		ShellExecute("https://www.dropbox.com/enable_public_folder", "", "", "open")
 		MsgBox(0, "Notice", "You must run GifT again once you have created your public folder.")
 	Else
 		MsgBox(0, "Notice", "If you already have a public Dropbox folder, please change its location to: " & @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
 	EndIf
-	_Exit()
+	_Splash(2000)
+	Exit
+ElseIf _GetTrayText("Dropbox") == "" Then
+	MsgBox(0, "Error", "Dropbox is not running.  You must run dropbox in order to upload files")
+	_Splash(2000)
+	Exit
+EndIf
+
+$VERSION = 4
+$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
+If $NEWVERSION > $VERSION Then
+	$enable = MsgBox(4, "Update", "New version of GifT available.  Would you like to download?")
+	If $enable == 6 Then
+		$enable = MsgBox(4, "Update", "Would you like source files as well?")
+		If $enable == 6 Then
+			ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT" & "v" & $NEWVERSION & ".rar", "", "", "open")
+		Else
+			ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT.exe", "", "", "open")
+		EndIf
+		Exit
+	EndIf
 EndIf
 #endregion Errors
 
 #region Variables
-Global $hImage, $hGraphic, $hGUI
 _Files()
 _Splash(-1)
 
@@ -50,8 +72,8 @@ $UID = 0
 $FPS = 5
 $LINK = "https://dl.dropboxusercontent.com/u/" & $UID & "/"
 $FILENAME = "default" ;Will be changed Date_Time
-$path = @HomeDrive & "\Users\Computer\Dropbox\Public\" ;doesnt work
-$dir = @HomeDrive & "\GifT\"
+$PATH = @HomeDrive & "\Users\Computer\Dropbox\Public\"
+$DIR = @HomeDrive & "\GifT\"
 $DARK = 200
 $LIGHT = 50
 $BGCOLOR = 0x000000
@@ -76,9 +98,6 @@ TraySetState()
 
 $WHOLE = GUICreate("", @DesktopWidth, @DesktopHeight, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $UP = GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$LEFT = GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$RIGHT = GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$DOWN = GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $GIF = GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $SQUARE = GUICreateSquare(0, 0, 0, 0, 0x00FF00)
 
@@ -86,16 +105,13 @@ WinSetTrans($whole, "", 1)
 GUISetCursor(3, 1, $whole)
 
 GUISetState(@SW_SHOW, $up)
-GUISetState(@SW_SHOW, $left)
-GUISetState(@SW_SHOW, $right)
-GUISetState(@SW_SHOW, $down)
 GUISetState(@SW_SHOW, $gif)
 #endRegion
 
 #region Settings Window
-$SMAIN 			= GUICreate("Settings", 400, 235, -1, -1, $WS_SYSMENU)
-$SDROPPATH 		= GUICtrlCreateInput(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\", 5, 10, 300, 22)
-$SSAVEPATH 		= GUICtrlCreateInput(@HomeDrive & "\GifT\", 5, 38, 300, 22)
+$SMAIN 			= GUICreate("Settings", 400, 250, -1, -1, $WS_SYSMENU)
+$SDROPPATH 		= GUICtrlCreateInput(@HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\", 85, 10, 220, 22)
+$SSAVEPATH 		= GUICtrlCreateInput(@HomeDrive & "\GifT\", 85, 38, 220, 22)
 $SDROPBROWSE 	= GUICtrlCreateButton("Browse...", 315, 8, 70, 25)
 $SSAVEBROWSE 	= GUICtrlCreateButton("Browse...", 315, 36, 70, 25)
 
@@ -106,17 +122,18 @@ $SSELOP 		= GUICtrlCreateInput(50, 195, 98, 65, 22, $ES_NUMBER)
 $SBACKCOL 		= _GUIColorPicker_Create('', 335, 66, 48, 26, IniRead($INIPATH, "settings", "backcol", "0"), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
 $SSELCOL 		= _GUIColorPicker_Create('', 335, 96, 48, 26, IniRead($INIPATH, "settings", "selcol", "255"), BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_MAGNIFICATION, $CP_FLAG_ARROWSTYLE), 0, -1, -1, 0, 'Colors', 'Custom...', '_ColorChooserDialog')
 
-$SCOPY 			= GUICtrlCreateCheckbox(" Copy link to clipboard", 9, 130, 120, 20)
-$SOPEN 			= GUICtrlCreateCheckbox(" Open link in browser", 9, 155, 115, 20)
-$SDELETE 		= GUICtrlCreateCheckbox(" Delete local files after conversion", 9, 180, 175, 20)
-$SSOUND			= GUICtrlCreateCheckbox(" Play notification sound", 210, 130, 125, 20)
-$SMOUSE			= GUICtrlCreateCheckbox(" Capture screen with mouse", 210, 155, 150, 20)
-$SSAVE 			= GUICtrlCreateCheckbox(" Save gif file locally", 210, 180, 110, 20)
+$SCOPY 			= GUICtrlCreateCheckbox(" Copy link to clipboard", 19, 142, 120, 20)
+$SOPEN 			= GUICtrlCreateCheckbox(" Open link in browser", 19, 167, 115, 20)
+$SDELETE 		= GUICtrlCreateCheckbox(" Delete local files after conversion", 19, 192, 175, 20)
+$SSOUND			= GUICtrlCreateCheckbox(" Play notification sound", 225, 142, 125, 20)
+$SMOUSE			= GUICtrlCreateCheckbox(" Capture screen with mouse", 225, 167, 150, 20)
+$SSAVE 			= GUICtrlCreateCheckbox(" Save gif file locally", 225, 192, 110, 20)
 
-_loadIni()
-
-GUICtrlCreateLabel("UID:", 11, 72, 25, 20)
-GUICtrlCreateLabel("FPS:", 11, 102, 25, 20)
+GUICtrlCreateGroup("Options", 7, 125, 380, 92)
+GUICtrlCreateLabel("Dropbox path:", 10, 14, 70, 20)
+GUICtrlCreateLabel("Save path:", 10, 42, 55, 20)
+GUICtrlCreateLabel("UID:", 10, 72, 25, 20)
+GUICtrlCreateLabel("FPS:", 10, 102, 25, 20)
 GUICtrlCreateLabel("BG Opacity:", 117, 72, 65, 20)
 GUICtrlCreateLabel("Select Opacity:", 117, 102, 75, 20)
 GUICtrlCreateLabel("BG Color:", 270, 72, 60, 20)
@@ -128,6 +145,7 @@ GUICtrlSetLimit($SFPS, 2)
 #endregion Settings Window
 
 #region Load information
+_loadIni()
 If Not FileExists(@HomeDrive & "\GifT\settings.ini") Then
 	_updateIni()
 EndIf
@@ -172,6 +190,7 @@ While 1 ;Program Loop
 				GUICtrlSetData($SSAVEPATH, $temp & "\")
 			EndIf
 	EndSwitch
+	Sleep(5)
 WEnd
 
 Func _Capture($l, $t, $w, $h) ;Takes pictures of the desktop until stopped
@@ -204,12 +223,15 @@ Func _Select() ;Selection process to determine what to record
 				$pos = MouseGetPos()
 				$lefts = _Order($mp[0], $pos[0])
 				$tops = _Order($mp[1], $pos[1])
-				_Update($lefts[0], $tops[0], $lefts[1], $tops[1])
+
+				_GUISetHole($up, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
 				WinMove($gif, "", $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
+				Sleep(50)
 			WEnd
+
 			GUISetState(@SW_HIDE, $whole)
-			WinSetTrans($gif, "", Ceiling($LIGHT / 255))
-			_Update($lefts[0], $tops[0], $lefts[1], $tops[1])
+			WinSetTrans($gif, "", 0)
+			_GUISetHole($up, $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
 
 			$square = SquareResize($lefts[0] - 3, $tops[0] - 3, $lefts[1] + 7, $tops[1] + 7, $square)
 			GUISetState(@SW_SHOW, $square)
@@ -219,20 +241,18 @@ Func _Select() ;Selection process to determine what to record
 				_Capture($lefts[0], $tops[0], $lefts[1], $tops[1])
 			Else
 				WinMove($up, "", 0, 0, 0, 0)
-				WinMove($left, "", 0, 0, 0, 0)
-				WinMove($right, "", 0, 0, 0, 0)
-				WinMove($down, "", 0, 0, 0, 0)
+				_GUISetHole($up, 0, 0, 0, 0)
 				WinMove($gif, "", 0, 0, 0, 0)
 				GUISetState(@SW_HIDE, $square)
 				MsgBox(0, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window")
 			EndIf
 			Return
 		EndIf
+		Sleep(50)
 	WEnd
 EndFunc   ;==>_Select
 
 #region Clear Functions
-
 Func _Exit() ;Exits the program
 	_Stop()
 	$quit = MsgBox(4, "Are you sure?", "Are you sure you want to quit?")
@@ -244,16 +264,14 @@ EndFunc   ;==>_Exit
 
 Func _Reset() ;Sets up for screen recording and begins _Select()
 	GUISetState(@SW_SHOW, $whole)
-	_Update(0, @DesktopHeight, 0, 0)
+	WinMove($up, "", 0, 0, @DesktopWidth, @DesktopHeight)
 	_Select()
 EndFunc   ;==>_Reset
 
 Func _Stop() ;Stops the current recording and completes final steps
 	If $started == 1 Then
 		WinMove($up, "", 0, 0, 0, 0)
-		WinMove($left, "", 0, 0, 0, 0)
-		WinMove($right, "", 0, 0, 0, 0)
-		WinMove($down, "", 0, 0, 0, 0)
+		_GUISetHole($up, 0, 0, 0, 0)
 		WinMove($gif, "", 0, 0, 0, 0)
 		GUISetState(@SW_HIDE, $square)
 		HotKeySet("{F4}")
@@ -261,6 +279,19 @@ Func _Stop() ;Stops the current recording and completes final steps
 		$theFiles = _getFiles($dir & $FILENAME & "\")
 
 		_convert($theFiles, $path, $FPS, @HomeDrive & "\GifT\Gif.exe")
+		If _GetTrayText("Dropbox") == "" Then
+			MsgBox(0, "Error", "Dropbox is not running.  You must run dropbox in order to upload files.")
+			MsgBox(0, "Exit", "GifT will now close.")
+			If IniRead($INIPATH, "settings", "delete", "4") == 1 Then
+				DirRemove($dir & $FILENAME, 1)
+			EndIf
+			If IniRead($INIPATH, "settings", "save", "4") == 1 Then
+				FileCopy($path & $FILENAME & ".gif", @HomeDrive & "\GifT\Gifs\" & $FILENAME & ".gif", 8)
+			EndIf
+			_Splash(2000)
+			Exit
+		EndIf
+
 		$UPLOADURL = _shortURL($LINK & $FILENAME & ".gif")
 		While Not StringInStr(_GetTrayText("Dropbox"), "Up to date")
 			Sleep(500)
@@ -288,9 +319,7 @@ EndFunc   ;==>_Stop
 Func _Cancel() ;Cancels the current recording and deletes files
 	If $started == 1 Then
 		WinMove($up, "", 0, 0, 0, 0)
-		WinMove($left, "", 0, 0, 0, 0)
-		WinMove($right, "", 0, 0, 0, 0)
-		WinMove($down, "", 0, 0, 0, 0)
+		_GUISetHole($up, 0, 0, 0, 0)
 		WinMove($gif, "", 0, 0, 0, 0)
 		GUISetState(@SW_HIDE, $square)
 		HotKeySet("{F4}")
@@ -368,8 +397,9 @@ Func _Order($a, $b) ;Orders $a and $b from least to greatest
 	Return $res
 EndFunc   ;==>_Order
 
-Func _shortURL($url, $user = "giftupload", $api = "R_026342ffc376b66dc50460a5634fe2ec") ;shortens URL bit.ly
-	Return BinaryToString(InetRead("http://api.bit.ly/v3/shorten?login=" & $user & "&apiKey=" & $api & "&longUrl=" & $url & "&format=txt"))
+Func _shortURL($url);, $user = "giftupload", $api = "R_026342ffc376b66dc50460a5634fe2ec") ;shortens URL bit.ly
+	;Return BinaryToString(InetRead("http://api.bit.ly/v3/shorten?login=" & $user & "&apiKey=" & $api & "&longUrl=" & $url & "&format=txt"))
+	Return BinaryToString(InetRead("http://api.waa.ai/?url=" & $url))
 EndFunc   ;==>_shortURL
 #endregion Helper Functions
 
@@ -390,25 +420,13 @@ Func _loadIni() ;Loads ini file and sets data to controls
 	GUICtrlSetState($SSAVE, IniRead($INIPATH, "settings", "save", "4"))
 EndFunc   ;==>_loadIni
 
-Func _Update($l, $t, $w, $h) ;Updates the background gui to have a hole in the middle
-	WinMove($up, "", 0, 0, @DesktopWidth, $t)
-	WinMove($down, "", 0, $t + $h + 1, @DesktopWidth, @DesktopHeight - $h - $t)
-	WinMove($left, "", 0, $t, $l, $h + 1)
-	WinMove($right, "", $l + $w + 1, $t, @DesktopWidth - $l - $w, $h + 1)
-EndFunc   ;==>_Update
-
 Func _updateGUI() ;Sets the color and opacity of the GUIs
 	GUISetBkColor($BGCOLOR, $up)
-	GUISetBkColor($BGCOLOR, $left)
-	GUISetBkColor($BGCOLOR, $right)
-	GUISetBkColor($BGCOLOR, $down)
 	GUISetBkColor($SELCOLOR, $gif)
+	GUISetBkColor($BGCOLOR, $whole)
 
 	WinSetTrans($up, "", $DARK)
-	WinSetTrans($left, "", $DARK)
-	WinSetTrans($right, "", $DARK)
-	WinSetTrans($down, "", $DARK)
-	WinSetTrans($gif, "", Ceiling($LIGHT / 255))
+	WinSetTrans($gif, "", 0)
 EndFunc   ;==>_updateGUI
 
 Func _updateIni() ;Writes new values to .ini file
@@ -548,7 +566,7 @@ Func _GUISetHole($hWin, $i_X, $i_Y, $i_SizeW, $i_SizeH) ;Creates a hole in the g
 	$aWinPos = WinGetPos($hWin)
 
 	$Outer_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", 0, "long", 0, "long", $aWinPos[2], "long", $aWinPos[3])
-	$Inner_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", $i_Y, "long", $i_Y, "long", $i_Y + $i_SizeW, _
+	$Inner_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", $i_X, "long", $i_Y, "long", $i_X + $i_SizeW, _
 			"long", $i_Y + $i_SizeH)
 	$Combined_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", 0, "long", 0, "long", 0, "long", 0)
 	DllCall("gdi32.dll", "long", "CombineRgn", "long", $Combined_Rgn[0], "long", $Outer_Rgn[0], "long", $Inner_Rgn[0], _
