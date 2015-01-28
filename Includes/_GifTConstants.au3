@@ -1,13 +1,15 @@
-Global const $VERSION 	= 15
+Global const $VERSION 	= 17
 Global const $RECFUNC 	= "_Video"
 Global const $PICFUNC 	= "_Picture"
 Global const $CANCKEY	= "{ESC}"
 Global const $CANCFUNC	= "_Cancel"
 Global const $STOPFUNC	= "_Stop"
-Global const $GIFTPATH 	= @HomeDrive & "\Program Files\GifT\"
+Global const $GIFTPATH 	= @ProgramFilesDir & "\GifT\"
 Global const $INIPATH 	= $GIFTPATH & "settings.ini"
 Global const $LOGPATH	= $GIFTPATH & "uploads.log"
 Global const $DIR 		= IniRead($INIPATH, "settings", "dirpath", $GIFTPATH & "Local\")
+
+FileChangeDir($GIFTPATH) ;Sets working directory to $GIFTPATH
 
 #include "_ColorChooser.au3"
 #include "_ColorPicker.au3"

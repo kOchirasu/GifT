@@ -14,17 +14,14 @@ Func _Upload($t = 0)
 		If $t == 1 Then
 
 			If _getContainer() = ".gif" And $GIFTYPE <> 0 Then
-				_FFmpeg_Split($uPath & $FILENAME & ".mkv", $FPS)
-				DllCall($GIFTPATH & "quantgif.dll", "int:cdecl", "quantizeGif", "wstr", StringTrimRight($uPath, 1), "int", $GIFTYPE - 1, "int", $FPS) ;Trim off the \ char
+				_FFmpeg_Split($uPath & $FILENAME & ".mkv", _getFPS(), GUICtrlRead($SDELETE) = $GUI_CHECKED)
+				DllCall($GIFTPATH & "quantgif.dll", "int:cdecl", "quantizeGif", "wstr", StringTrimRight($uPath, 1), "int", $GIFTYPE - 1, "int", _getFPS()) ;Trim off the \ char
 				If @error Then
-					MsgBox(0, "Error!", "error code : " & @error)
+					MsgBox(0, "quantgif.dll Error!", "DllCall error code : " & @error)
+					return -1
 				EndIf
-			Else
-				_FFmpeg_Convert($uPath & $FILENAME & ".mkv", $uPath & $FILENAME & _getContainer())
-			EndIf
-
-			If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
-				FileDelete($uPath & $FILENAME & ".mkv")
+			ElseIf GUICtrlRead($SENCODE) = $GUI_UNCHECKED Then
+				_FFmpeg_Encode($uPath & $FILENAME & ".mkv", $uPath & $FILENAME & _getContainer(), GUICtrlRead($SDELETE) = $GUI_CHECKED)
 			EndIf
 			$FILENAME &= _getContainer()
 		Else
@@ -74,11 +71,18 @@ Func _Upload($t = 0)
 			DirRemove($uPath, 1)
 		EndIf
 
-		If $SERVICE <> "dropbox" Then
-			_FileWriteLog($LOG, "Uploaded " & $FILENAME & " via " & $SERVICE & " URL=" & $ERRCHECK & " shortURL=" & $UPLOADURL)
+		Local $logMsg = "Uploaded " & $FILENAME & " via " & $SERVICE & " URL="
+		Local $longURL
+		If $SERVICE = "dropbox" Then
+			$longURL = $LINK & $FILENAME
 		Else
-			_FileWriteLog($LOG, "Uploaded " & $FILENAME & " via " & $SERVICE & " URL=" & $LINK & $FILENAME & " shortURL=" & $UPLOADURL)
+			$longURL &= $ERRCHECK
 		EndIf
+		$logMsg &= $longURL
+		If $longURL <> $UPLOADURL Then
+			$logMsg &= " shortURL=" & $UPLOADURL
+		EndIf
+		_FileWriteLog($LOG, $logMsg)
 	EndIf
 EndFunc
 

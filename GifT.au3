@@ -1,6 +1,5 @@
 ﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_Icon=upload.ico
-#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Icon=Includes\upload.ico
 #AutoIt3Wrapper_Run_AU3Check=n
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -18,7 +17,7 @@
 #include <FTPEx.au3>
 #include "Array.au3"
 
-#include "_GifTConstants.au3"
+#include "Includes/_GifTConstants.au3"
 
 Global $hImage, $hGraphic, $hGUI
 
@@ -65,34 +64,24 @@ EndIf
 #region Variables
 If _checkFiles() <> "" Then
 	If MsgBox($MB_TOPMOST + $MB_ICONQUESTION + $MB_YESNO, "Missing Files!", "You are missing the following files:" & @LF & @LF & _checkFiles() & @LF & @LF & "Would you like to download the installer?") = $IDYES Then
-		ShellExecute("http://rasu.us/GifT/Installer.exe", "", "", "open")
+		If @OSArch = "X32" Then
+			ShellExecute("http://rasu.us/GifT/GifTInstaller_(x32).exe", "", "", "open")
+		Else
+			ShellExecute("http://rasu.us/GifT/GifTInstaller_(x64).exe", "", "", "open")
+		EndIf
 	EndIf
 	Exit
 EndIf
+
+Global $PATH, $UID, $LINK, $PUSHKEY, $LIGHT, $SELCOLOR, $BOXCOLOR, $RECKEY, $PICKEY, $COMPKEY, $SERVER, $USER, $PASS
+
 DirCreate($DIR)
-
-$PATH 		= IniRead($INIPATH, "settings", "droppath", @HomeDrive & "\Users\" & @UserName & "\Dropbox\Public\")
-$UID 		= IniRead($INIPATH, "settings", "uid", "0")
-$LINK 		= "https://dl.dropboxusercontent.com/u/" & $UID & "/"
-$PUSHKEY	= IniRead($INIPATH, "settings", "pushkey", 0)
-$LIGHT 		= IniRead($INIPATH, "settings", "selop", 50)
-$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", 52479)
-$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", 16711680)
-$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ r"), " ", "")
-$PICKEY 	= StringReplace(IniRead($INIPATH, "settings", "picturekey", "+ ^ e"), " ", "")
-$COMPKEY 	= StringReplace(IniRead($INIPATH, "settings", "completekey", "{F4}"), " ", "")
-$SERVER 	= IniRead($INIPATH, "settings", "ftpserver", "")
-$USER 		= IniRead($INIPATH, "settings", "ftpuser", "")
-$PASS 		= IniRead($INIPATH, "settings", "ftppass", "")
-
 $FILENAME 	= "00-00-00_00.00.00" ;Will be changed Date_Time
 $UPLOADURL 	= ""
 $DEVICELIST = _FFmpeg_DeviceList()
+$PID 		= 0
 
-$pid 		= 0
-
-HotKeySet($RECKEY, $RECFUNC)
-HotKeySet($PICKEY, $PICFUNC)
+_updateVar()
 #endRegion
 
 #region Tray Menu + GUI Stuff
@@ -146,9 +135,6 @@ If $DEVICELIST[1][0] > 1 Then
 	;ConsoleWrite($popDev & @CRLF)
 	GUICtrlSetData($SAUDDEV, $popDev, $DEVICELIST[1][1])
 EndIf
-
-GUICtrlSetState($SENCODE, $GUI_CHECKED)
-GUICtrlSetState($SENCODE, $GUI_DISABLE)
 ;_ArrayDisplay($DEVICELIST)
 #endregion
 
@@ -262,16 +248,14 @@ GUICtrlSetState($SEDIT, $GUI_DISABLE);TEMP
 #endRegion
 
 GUICtrlCreateTabItem("To-do")
-$STODO = "- Make program stop recording if ffmpeg process disappears" & @LF
-$STODO &= "- Add option to encode after recording is finished so slower computers won't lag or freeze up" & @LF
-$STODO &= "- Create upload queue so that program doesn't freeze while uploading" & @LF
+$STODO = "- Create upload queue so that program doesn't freeze while uploading" & @LF
 $STODO &= "- Move color quantization to advanced settings" & @LF
 $STODO &= "- Change gif editor to a video editor" & @LF
 $STODO &= "- Add port selection and encryption to FTP upload" & @LF
 $STODO &= "- Redo logo splash screen in c++ for less lags" & @LF
 $STODO &= "- Change temporary files so that they are not in folders anymore" & @LF
+$STODO &= "- Remove old version downloading because im lazy to upload every version source code" & @LF
 GUICtrlCreateLabel($STODO, 15, 35, 350, 175)
-
 
 _loadIni()
 
@@ -279,7 +263,7 @@ $boxDll = DllOpen($GIFTPATH & "areabox.dll")
 DllCall($boxDll, "none", "initialize")
 if @error Then ConsoleWrite("error: " & @error & @CRLF)
 _endSplash()
-GUISetState(@SW_SHOW, $SMAIN)
+;GUISetState(@SW_SHOW, $SMAIN)
 #endRegion
 
 While 1 ;Program Loop
@@ -298,7 +282,6 @@ While 1 ;Program Loop
 	$MSG = GUIGetMsg()
 	Switch $MSG
 		Case $GUI_EVENT_CLOSE
-			Exit
 			_updateVar()
 			If _dropboxCheck() == -1 Then
 				MsgBox($MB_OK, "Revert", "Reverting to imgur service...")
@@ -337,6 +320,9 @@ While 1 ;Program Loop
 		Case $SMUTE
 			GUICtrlSetState($SAUDDEV, GUICtrlRead($SMUTE) = $GUI_UNCHECKED ? $GUI_ENABLE : $GUI_DISABLE)
 			IniWrite($INIPATH, "settings", "mute", GUICtrlRead($SMUTE))
+
+		Case $SENCODE
+			IniWrite($INIPATH, "settings", "encode", GUICtrlRead($SENCODE))
 
 		Case $SUPDATE
 			IniWrite($INIPATH, "settings", "update", GUICtrlRead($SUPDATE))
@@ -408,19 +394,24 @@ While 1 ;Program Loop
 			EndIf
 
 		Case $SFTPSERVER
-			IniWrite($INIPATH, "settings", "ftpserver", GUICtrlRead($SFTPSERVER))
+			$SERVER = GUICtrlRead($SFTPSERVER)
+			IniWrite($INIPATH, "settings", "ftpserver", $SERVER)
 
 		Case $SFTPUSER
-			IniWrite($INIPATH, "settings", "ftpuser", GUICtrlRead($SFTPUSER))
+			$USER = GUICtrlRead($SFTPUSER)
+			IniWrite($INIPATH, "settings", "ftpuser", $USER)
 
 		Case $SFTPPASS
-			IniWrite($INIPATH, "settings", "ftppass", GUICtrlRead($SFTPPASS))
+			$PASS = GUICtrlRead($SFTPPASS)
+			IniWrite($INIPATH, "settings", "ftppass", $PASS)
 
 		Case $SAPI
-			IniWrite($INIPATH, "settings", "pushkey", GUICtrlRead($SAPI))
+			$PUSHKEY = GUICtrlRead($SAPI)
+			IniWrite($INIPATH, "settings", "pushkey", $PUSHKEY)
 
 		Case $SUID
-			IniWrite($INIPATH, "settings", "uid", GUICtrlRead($SUID))
+			$UID = GUICtrlRead($SUID)
+			IniWrite($INIPATH, "settings", "uid", $UID)
 
 		Case $SSELOP
 			$LIGHT = GUICtrlRead($SSELOP)
@@ -467,14 +458,29 @@ While 1 ;Program Loop
 			GUISetState(@SW_SHOW, $SMAIN)
 			;MsgBox(0, "Unprogrammed", "This function is not yet programmed!")
 			;Exit
-
 	EndSwitch
+
+	If $PID = 0 And ProcessExists("ffmpeg.exe") Then
+		ProcessClose("ffmpeg.exe")
+		_FileWriteLog($LOG, "ffmpeg.exe was already running, and has been closed")
+	ElseIf $PID <> 0 And Not ProcessExists("ffmpeg.exe") Then
+		MsgBox(0, "Error", "ffmpeg.exe seems to have crashed unexpectedly.  The recording has been canceled.")
+		_Cancel()
+	EndIf
 WEnd
 
 Func _Record($box) ;Records the selection until terminated
 	$FILENAME = @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "." & @MIN & "." & @SEC
 	DirCreate($DIR & $FILENAME)
-	$pid = _FFmpeg_Record($box[0], $box[1], $box[2], $box[3], $DIR & $FILENAME & "\" & $FILENAME & ".mkv", GUICtrlRead($SVIDDEV), GUICtrlRead($SAUDDEV), GUICtrlRead($SMUTE) = $GUI_CHECKED) ;Might be problematic since you can do things while video recording
+	Local $mute = GUICtrlRead($SMUTE) = $GUI_CHECKED
+	Local $encode = GUICtrlRead($SENCODE) = $GUI_CHECKED
+	Local $container = _getContainer()
+	If $container = ".gif" Then
+		$container = ".mkv"
+		$mute = true ;gifs don't need sound anyway
+		$encode = false ;the file will be reconverted anyway
+	EndIf
+	$PID = _FFmpeg_Record($box[0], $box[1], $box[2], $box[3], $DIR & $FILENAME & "\" & $FILENAME & $container, GUICtrlRead($SVIDDEV), GUICtrlRead($SAUDDEV), $mute, $encode) ;Might be problematic since you can do things while video recording
 EndFunc   ;==>_Capture
 
 Func _Capture($box) ;Takes a picture of the selection and uploads
@@ -486,7 +492,7 @@ EndFunc
 
 Func _Select($action) ;Selection process to determine what to record/take picture of
 	If GUICtrlRead($SVIDDEV) = "No compatible Video devices" Then
-		If MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR + $MB_YESNO, "Error", "No compatible DirectShow video devices were detected. Would you like to download one?") = $IDYES Then
+		If MsgBox($MB_TOPMOST + $MB_SYSTEMMODAL + $MB_ICONERROR + $MB_YESNO, "Error", "No compatible DirectShow video devices were detected." & @LF & "Would you like to download one?") = $IDYES Then
 			GUISetState(@SW_HIDE, $SMAIN)
 			If _dShowDownload() <> 0 Then
 				MsgBox($MB_TOPMOST + $MB_OK, "Exiting", "Please restart GifT once you have completed the installation.")
@@ -513,6 +519,9 @@ Func _Select($action) ;Selection process to determine what to record/take pictur
 	DllCall($boxDll, "bool:cdecl", "setColor", "dword", $SELCOLOR, "byte", $LIGHT)
 	if @error Then ConsoleWrite("error: " & @error & @CRLF)
 
+	HotKeySet($RECKEY) ;Disable hotkeys to prevent queued commands
+	HotKeySet($PICKEY)
+
 	Local $areaBox = DllCall($boxDll, "int*:cdecl", "getSelection")
 	if @error Then ConsoleWrite("error: " & @error & @CRLF)
 
@@ -524,9 +533,6 @@ Func _Select($action) ;Selection process to determine what to record/take pictur
 	Next
 
 	If $box[2] * $box[3] <> 0 Then ;If area of selection is not nothing
-		HotKeySet($RECKEY) ;Disable hotkeys to prevent queued commands
-		HotKeySet($PICKEY)
-
 		If $action = "r" Then
 			HotKeySet($COMPKEY, $STOPFUNC) ;Need way to stop recording
 			HotKeySet($CANCKEY, $CANCFUNC) ;Need way to cancel recording
@@ -541,7 +547,9 @@ Func _Select($action) ;Selection process to determine what to record/take pictur
 			HotKeySet($PICKEY, $PICFUNC) ;For recording reenable once recording is cancled or completed...
 		EndIf
 	Else
-		TrayTip("Selection Canceled", "You have canceled the current selection.", 3, $TIP_ICONASTERISK)
+		HotKeySet($RECKEY, $RECFUNC) ;ReEnable hotkeys
+		HotKeySet($PICKEY, $PICFUNC)
+		TrayTip("Invalid Selection", "Your selection area is too small for recording.", 3, $TIP_ICONASTERISK)
 	EndIf
 	return
 EndFunc   ;==>_Select
@@ -564,10 +572,10 @@ Func _Picture() ; Begin picture selection
 EndFunc
 
 Func _Stop() ;Stops the current recording and completes final steps
-	If $pid <> 0 Then
+	If $PID <> 0 Then
 		GUISetState(@SW_HIDE, $square)
-		StdinWrite($pid, 'q')
-		$pid = 0
+		StdinWrite($PID, 'q')
+		$PID = 0
 
 		HotKeySet($COMPKEY)
 		HotKeySet($CANCKEY)
@@ -578,10 +586,10 @@ Func _Stop() ;Stops the current recording and completes final steps
 EndFunc   ;==>_Stop
 
 Func _Cancel() ;Cancels the current recording and deletes files
-	If $pid <> 0 Then
+	If $PID <> 0 Then
 		GUISetState(@SW_HIDE, $square)
-		StdinWrite($pid, 'q')
-		$pid = 0
+		StdinWrite($PID, 'q')
+		$PID = 0
 
 		HotKeySet($COMPKEY)
 		HotKeySet($CANCKEY)
@@ -603,6 +611,11 @@ Func _dShowDownload()
 	Local $dShow64 = GUICtrlCreateButton("UScreenCapture (x64)", 5, 35, 140, 25)
 	Local $dShow64m = GUICtrlCreateButton("Mirror", 150, 35, 50, 25)
 
+	If @OSArch = "X32" Then
+		GUICtrlSetState($dShow64, $GUI_DISABLE)
+		GUICtrlSetState($dShow64m, $GUI_DISABLE)
+	EndIf
+
 	GUISetState(@SW_SHOW, $dShowGUI)
 
 	While 1
@@ -610,27 +623,22 @@ Func _dShowDownload()
 			Case $GUI_EVENT_CLOSE
 				GUIDelete($dShowGUI)
 				Return 0
-
 			Case $dShow32
 				ShellExecute("http://www.umediaserver.net/bin/UScreenCapture.zip", "", "", "open")
 				GUIDelete($dShowGUI)
 				Return 1
-
 			Case $dShow32m
 				ShellExecute("http://rasu.us/GifT/UScreenCapture_(x86).msi", "", "", "open")
 				GUIDelete($dShowGUI)
 				Return 1
-
 			Case $dShow64
 				ShellExecute("http://www.umediaserver.net/bin/UScreenCapture(x64).zip", "", "", "open")
 				GUIDelete($dShowGUI)
 				Return 1
-
 			Case $dShow64m
 				ShellExecute("http://rasu.us/GifT/UScreenCapture_(x64).msi", "", "", "open")
 				GUIDelete($dShowGUI)
 				Return 1
-
 		EndSwitch
 	WEnd
 EndFunc
@@ -677,6 +685,7 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 	GUICtrlSetState($SDELETE, IniRead($INIPATH, "settings", "delete", $GUI_CHECKED))
 	GUICtrlSetState($SSOUND, IniRead($INIPATH, "settings", "sound", $GUI_CHECKED))
 	GUICtrlSetState($SMUTE, IniRead($INIPATH, "settings", "mute", $GUI_UNCHECKED))
+	GUICtrlSetState($SENCODE, IniRead($INIPATH, "settings", "encode", $GUI_CHECKED))
 	GUICtrlSetState($SUPDATE, IniRead($INIPATH, "settings", "update", $GUI_CHECKED))
 
 	_setKeys($SRECORD, IniRead($INIPATH, "settings", "recordkey", "+ ^ r"))

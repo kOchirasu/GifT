@@ -109,7 +109,7 @@ Func _AdvancedSettings()
 				IniWrite($INIPATH, "general", "time", GUICtrlRead($AVTIME))
 
 			Case $AVCONT
-				InitWrite($INIPATH, "general", "cont", GUICtrlRead($AVCONT))
+				IniWrite($INIPATH, "general", "cont", GUICtrlRead($AVCONT))
 
 			Case $AVATHREAD, $AVATIME
 				$AVCHECK = GUICtrlRead($MSG) = $GUI_UNCHECKED ? $GUI_ENABLE : $GUI_DISABLE
@@ -207,44 +207,54 @@ Func _AdvancedSettings()
 	WEnd
 EndFunc
 
-Func _getCommand()
+Func _getCommand($ext = "")
 	Local $cmd = ""
 
-	$cmd &= GUICtrlRead($AVCFPS)
+	$cmd &= GUICtrlRead($AVCFPS) ;Framerate
 	If GUICtrlRead($AVAFPS) = $GUI_UNCHECKED Then
 		$cmd &= GUICtrlRead($AVFPS) & " "
 	Else
 		$cmd &= (GUICtrlRead($AVCONT) = "gif" ? 10 : 20) & " "
 	EndIf
-	If GUICtrlRead($AVACRF) = $GUI_UNCHECKED Then
+	If $ext = "webm" Then
+		$cmd &= "-qmax 25 "
+	ElseIf GUICtrlRead($AVACRF) = $GUI_UNCHECKED Then ;Constant rate factor
 		$cmd &= GUICtrlRead($AVCCRF) & GUICtrlRead($AVCRF) & " "
 	EndIf
-	If GUICtrlRead($AVACODECV) = $GUI_UNCHECKED Then
+	If GUICtrlRead($AVACODECV) = $GUI_UNCHECKED Then ;Video codec
 		$cmd &= GUICtrlRead($AVCCODECV) & GUICtrlRead($AVCODECV) & " "
 	EndIf
-	If GUICtrlRead($AVABITRATEV) = $GUI_UNCHECKED Then
+	If GUICtrlRead($AVABITRATEV) = $GUI_UNCHECKED Then ;Video bitrate
 		$cmd &= GUICtrlRead($AVCBITRATEV) & GUICtrlRead($AVBITRATEV) & " "
 	EndIf
-	If GUICtrlRead($AVAPIXFMT) = $GUI_UNCHECKED Then
+	If GUICtrlRead($AVAPIXFMT) = $GUI_UNCHECKED Then ;Pixel format
 		$cmd &= GUICtrlRead($AVCPIXFMT) & GUICtrlRead($AVPIXFMT) & " "
 	EndIf
-	$cmd &= GUICtrlRead($AVCPRESET)
+	$cmd &= GUICtrlRead($AVCPRESET) ;Video preset
 	If GUICtrlRead($AVAPRESET) = $GUI_UNCHECKED Then
 		$cmd &= GUICtrlRead($AVPRESET) & " "
 	Else
 		$cmd &= "ultrafast "
 	EndIf
 
-	If GUICtrlRead($AVARATE) = $GUI_UNCHECKED Then
+	If GUICtrlRead($AVARATE) = $GUI_UNCHECKED Then ;Audio sample rate
 		$cmd &= GUICtrlRead($AVCRATE) & GUICtrlRead($AVRATE) & " "
 	EndIf
+	$cmd &= GUICtrlRead($AVCQUALITY) ;Audio Quality
 	If GUICtrlRead($AVAQUALITY) = $GUI_UNCHECKED Then
-		$cmd &= GUICtrlRead($AVCQUALITY) & GUICtrlRead($AVQUALITY) & " "
+		$cmd &= GUICtrlRead($AVQUALITY) & " "
+	Else
+		$cmd &=  "4 "
 	EndIf
+	$cmd &= GUICtrlRead($AVCCHANNEL) ;Number of audio channels
 	If GUICtrlRead($AVACHANNEL) = $GUI_UNCHECKED Then
-		$cmd &= GUICtrlRead($AVCCHANNEL) & GUICtrlRead($AVCHANNEL) & " "
+		$cmd &= GUICtrlRead($AVCHANNEL) & " "
+	Else
+		$cmd &= "2 "
 	EndIf
-	If GUICtrlRead($AVACODECA) = $GUI_UNCHECKED Then
+	If $ext = "webm" Then ;Audio codec
+		$cmd &= GUICtrlRead($AVCCODECA) & "libvorbis "
+	ElseIf GUICtrlRead($AVACODECA) = $GUI_UNCHECKED Then
 		$cmd &= GUICtrlRead($AVCCODECA) & GUICtrlRead($AVCODECA) & " "
 	EndIf
 	If GUICtrlRead($AVABITRATEA) = $GUI_UNCHECKED Then
@@ -270,6 +280,10 @@ EndFunc
 
 Func _getContainer()
 	Return "." & GUICtrlRead($AVCONT)
+EndFunc
+
+Func _getFPS()
+	Return GUICtrlRead($AVFPS)
 EndFunc
 
 Func _rangeLimit($val, $min, $max)
