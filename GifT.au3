@@ -37,7 +37,7 @@ If _dropboxCheck() == -1 Then
 	Exit
 EndIf
 
-$VERSION = 9
+$VERSION = 10.1
 If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
 	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 	If $NEWVERSION > $VERSION Then
@@ -115,13 +115,14 @@ $STABS 		= GUICtrlCreateTab(7, 7, 367, 195)
 
 #region Settings - General Tab
 GUICtrlCreateTabItem("General")
-$SCOPY 		= GUICtrlCreateCheckbox(" Copy link to clipboard", 19, 100, 120, 20)
-$SOPEN 		= GUICtrlCreateCheckbox(" Open link in browser", 19, 125, 115, 20)
-$SDELETE 	= GUICtrlCreateCheckbox(" Delete local files after conversion", 19, 150, 175, 20)
-$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 215, 100, 125, 20)
-$SMOUSE 	= GUICtrlCreateCheckbox(" Capture screen with mouse", 215, 125, 150, 20)
-$SSAVE 		= GUICtrlCreateCheckbox(" Save gif file locally", 215, 150, 110, 20)
-$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 19, 175, 120, 20)
+$SCOPY 		= GUICtrlCreateCheckbox(" Copy link to clipboard", 20, 100, 120, 20)
+$SOPEN 		= GUICtrlCreateCheckbox(" Open link in browser", 20, 125, 115, 20)
+$SPICS		= GUICtrlCreateCheckbox(" Save picture locally", 20, 150, 110, 20)
+$SDELETE 	= GUICtrlCreateCheckbox(" Delete files after conversion", 20, 175, 150, 20)
+$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 205, 100, 125, 20)
+$SMOUSE 	= GUICtrlCreateCheckbox(" Capture screen with mouse", 205, 125, 150, 20)
+$SSAVE 		= GUICtrlCreateCheckbox(" Save gif file locally", 205, 150, 110, 20)
+$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 205, 175, 120, 20)
 
 $SAPI 		= GUICtrlCreateInput(0, 100, 35, 260, 22)
 $SUID 		= GUICtrlCreateInput(0, 100, 65, 75, 22, $ES_NUMBER)
@@ -279,41 +280,57 @@ While 1 ;Program Loop
 		Case $SRECORD
 			GUISetState(@SW_HIDE, $SMAIN)
 			GUICtrlSetData($SRECORD, _selectKey($SRECORD))
+			If GUICtrlRead($SRECORD) <> "CTRL + SHIFT + V" Then
+				GUICtrlSetState($SRECDF, $GUI_ENABLED)
+			EndIf
 
 		Case $SPICTURE
 			GUISetState(@SW_HIDE, $SMAIN)
 			GUICtrlSetData($SPICTURE, _selectKey($SPICTURE))
+			If GUICtrlRead($SPICTURE) <> "CTRL + SHIFT + 4" Then
+				GUICtrlSetState($SPICDF, $GUI_ENABLED)
+			EndIf
 
 		Case $SCOMPLETE
 			GUISetState(@SW_HIDE, $SMAIN)
 			GUICtrlSetData($SCOMPLETE, _selectKey($SCOMPLETE))
+			If GUICtrlRead($SCOMPLETE) <> "F4" Then
+				GUICtrlSetState($SCOMPDF, $GUI_ENABLED)
+			EndIf
 
 		Case $SCANCEL
 			GUISetState(@SW_HIDE, $SMAIN)
 			GUICtrlSetData($SCANCEL, _selectKey($SCANCEL))
+			If GUICtrlRead($SCANCEL) <> "ESC" Then
+				GUICtrlSetState($SCANCDF, $GUI_ENABLED)
+			EndIf
 
 		Case $SRECDF
 			If MsgBox(262148, "Reset", "Do you want to reset your 'recording' hotkey to default settings?") == 6 Then
 				GUICtrlSetData($SRECORD, "CTRL + SHIFT + V")
 				IniDelete($INIPATH, "settings", "recordkey")
+				GUICtrlSetState($SRECDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SPICDF
 			If MsgBox(262148, "Reset", "Do you want to reset your 'picture' hotkey to default settings?") == 6 Then
 				GUICtrlSetData($SPICTURE, "CTRL + SHIFT + 4")
 				IniDelete($INIPATH, "settings", "picturekey")
+				GUICtrlSetState($SPICDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SCOMPDF
 			If MsgBox(262148, "Reset", "Do you want to reset your 'complete' hotkey to default settings?") == 6 Then
 				GUICtrlSetData($SCOMPLETE, "F4")
 				IniDelete($INIPATH, "settings", "completekey")
+				GUICtrlSetState($SCOMPDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SCANCDF
 			If MsgBox(262148, "Reset", "Do you want to reset your 'cancel' hotkey to default settings?") == 6 Then
 				GUICtrlSetData($SCANCEL, "ESC")
 				IniDelete($INIPATH, "settings", "cancelkey")
+				GUICtrlSetState($SCANCDF, $GUI_DISABLE)
 			EndIf
 
 		Case $SWAAAI, $SBITLY, $SNSHORT
@@ -352,7 +369,7 @@ Func _takePicture($l, $t, $w, $h) ;Takes a picture of the selection and uploads
 	_ScreenCapture_Capture($PICSPATH & $FILENAME & ".png", $l, $t, $w, $h, $MOUSE)
 	If $service = "dropbox" Then
 		If _dropboxCheck() = -1 Then ;If it fails dropbox check
-			If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
+			If GUICtrlRead($SPICS) == $GUI_UNCHECKED Then
 				FileDelete($PICSPATH & $FILENAME & ".png")
 			EndIf
 			Exit
@@ -376,7 +393,7 @@ Func _takePicture($l, $t, $w, $h) ;Takes a picture of the selection and uploads
 		$UPLOADURL = _shortURL($ERRCHECK)
 	EndIf
 
-	If GUICtrlRead($SDELETE) == $GUI_CHECKED Then
+	If GUICtrlRead($SPICS) == $GUI_UNCHECKED Then
 		FileDelete($PICSPATH & $FILENAME & ".png")
 	EndIf
 
@@ -385,13 +402,14 @@ Func _takePicture($l, $t, $w, $h) ;Takes a picture of the selection and uploads
 	EndIf
 
 	TrayTip("Upload Complete", $UPLOADURL, 5, 1)
-
 	If GUICtrlRead($SCOPY) == $GUI_CHECKED Then
 		ClipPut($UPLOADURL)
 	EndIf
 	If GUICtrlRead($SOPEN) == $GUI_CHECKED Then
 		ShellExecute($UPLOADURL, "", "", "open")
 	EndIf
+	HotKeySet($RECKEY, "_Record")
+	HotKeySet($PICKEY, "_Picture")
 EndFunc
 
 Func _Select($action) ;Selection process to determine what to record/take picture of
@@ -724,7 +742,7 @@ Func _imgurUpload($path, $key = "f77d0b8cd41eb62792be0bf303e649df") ;Uploads to 
 EndFunc
 
 Func _puushUpload($path, $key) ;Uploads to puush
-	Local $output = ""
+	Local $stdoutr = "", $output = ""
 
 	$run = $CURL & " -F k=" & $key & " -F z=poop -F f=@" & $path & " --retry 2 --location-trusted --url http://puush.me/api/up"
 	$PID = Run($run, "", @SW_HIDE, $STDERR_CHILD + $STDOUT_CHILD)
@@ -735,7 +753,6 @@ Func _puushUpload($path, $key) ;Uploads to puush
 	WEnd
 	Local $piclink = StringSplit($output, ",")
 	If Not @error Then
-		;MsgBox(0, "", $piclink[2])
 		return $piclink[2]
 	Else
 		MsgBox(0, "", $output)
@@ -784,6 +801,7 @@ Func _convert($file, $output, $delay, $path) ;Animates a list of .gif using Gif.
 	ControlSetText($hWnd, "", "[CLASS:Edit; INSTANCE:1]", $output)
 	ControlSetText($hWnd, "", "[CLASS:Edit; INSTANCE:2]", $delay)
 	ControlClick($hWnd, "", "[CLASS:Button; INSTANCE:1]")
+	WinWaitClose($hWnd)
 EndFunc   ;==>_convert
 
 Func _convertHotkey($key) ;converts hotkey from actual to string form
@@ -824,6 +842,7 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 
 	GUICtrlSetState($SCOPY, IniRead($INIPATH, "settings", "copy", $GUI_CHECKED))
 	GUICtrlSetState($SOPEN, IniRead($INIPATH, "settings", "open", $GUI_UNCHECKED))
+	GUICtrlSetState($SPICS, IniRead($INIPATH, "settings", "savepic", $GUI_UNCHECKED))
 	GUICtrlSetState($SDELETE, IniRead($INIPATH, "settings", "delete", $GUI_UNCHECKED))
 	GUICtrlSetState($SSOUND, IniRead($INIPATH, "settings", "sound", $GUI_CHECKED))
 	GUICtrlSetState($SMOUSE, IniRead($INIPATH, "settings", "mouse", $GUI_CHECKED))
@@ -834,6 +853,19 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 	_setKeys($SPICTURE, IniRead($INIPATH, "settings", "picturekey", "+ ^ 4"))
 	_setKeys($SCOMPLETE, IniRead($INIPATH, "settings", "completekey", "{F4}"))
 	_setKeys($SCANCEL, IniRead($INIPATH, "settings", "cancelkey", "{ESC}"))
+
+	If GUICtrlRead($SRECORD) <> "CTRL + SHIFT + V" Then
+		GUICtrlSetState($SRECDF, $GUI_ENABLED)
+	EndIf
+	If GUICtrlRead($SPICTURE) <> "CTRL + SHIFT + 4" Then
+		GUICtrlSetState($SPICDF, $GUI_ENABLED)
+	EndIf
+	If GUICtrlRead($SCOMPLETE) <> "F4" Then
+		GUICtrlSetState($SCOMPDF, $GUI_ENABLED)
+	EndIf
+	If GUICtrlRead($SCANCEL) <> "ESC" Then
+		GUICtrlSetState($SCANCDF, $GUI_ENABLED)
+	EndIf
 
 	$temp = IniRead($INIPATH, "settings", "shorten", "waa.ai")
 	If $temp = "bit.ly" Then
@@ -906,6 +938,7 @@ Func _updateIni() ;Writes new values to .ini file
 
 	IniWrite($INIPATH, "settings", "copy", GUICtrlRead($SCOPY))
 	IniWrite($INIPATH, "settings", "open", GUICtrlRead($SOPEN))
+	IniWrite($INIPATH, "settings", "savepic", GUICtrlRead($SPICS))
 	IniWrite($INIPATH, "settings", "delete", GUICtrlRead($SDELETE))
 	IniWrite($INIPATH, "settings", "sound", GUICtrlRead($SSOUND))
 	IniWrite($INIPATH, "settings", "mouse", GUICtrlRead($SMOUSE))
@@ -931,7 +964,7 @@ Func _updateVar() ;Updates variable values based on .ini file
 	$BGCOLOR 	= IniRead($INIPATH, "settings", "backcol", "0")
 	$SELCOLOR 	= IniRead($INIPATH, "settings", "selcol", "255")
 	$BOXCOLOR 	= IniRead($INIPATH, "settings", "boxcol", "65280")
-	$MOUSE 		= 1 == IniRead($INIPATH, "settings", "mouse", "1")
+	$MOUSE 		= $GUI_CHECKED == IniRead($INIPATH, "settings", "mouse", "1")
 	HotKeySet($RECKEY)
 	$RECKEY 	= StringReplace(IniRead($INIPATH, "settings", "recordkey", "+ ^ v"), " ", "")
 	HotKeySet($RECKEY, "_Record")
