@@ -11,10 +11,9 @@
 #include <File.au3>
 #include <IE.au3>
 #include <Misc.au3>
-#include <WinAPI.au3>
-#include <Memory.au3>
 #Include "_ColorChooser.au3"
 #Include "_ColorPicker.au3"
+#Include "_FileDragDrop.au3"
 
 #Region Errors
 If _Singleton("GifT", 1) == 0 Then
@@ -68,11 +67,16 @@ $TEXIT 			= TrayCreateItem("Exit")
 
 TraySetState()
 
+$whole 			= GUICreate("", @DesktopWidth, @DesktopHeight, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $up 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $left 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $right 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 $down 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
-$gif 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOr($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+$gif 			= GUICreate("", 0, 0, 0, 0, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+$square 		= GUICreateSquare(0, 0, 0, 0, 0x00FF00)
+;BitOR($WS_SIZEBOX, $WS_POPUP), BitOR($WS_EX_DLGMODALFRAME, $WS_EX_DLGMODALFRAME, $WS_EX_CLIENTEDGE, $WS_EX_TOPMOST, $WS_EX_TOOLWINDOW
+WinSetTrans($whole, "", 1)
+GUISetCursor(3, 1, $whole)
 
 GUISetState(@SW_SHOW, $up)
 GUISetState(@SW_SHOW, $left)
@@ -173,10 +177,15 @@ Func _Select()
 				$lefts = _Order($mp[0], $pos[0])
 				$tops = _Order($mp[1], $pos[1])
 				_Update($lefts[0], $tops[0], $lefts[1], $tops[1])
-				WinMove($gif, "", $lefts[0], $tops[0], $lefts[1], $tops[1])
+				WinMove($gif, "", $lefts[0], $tops[0], $lefts[1] + 1, $tops[1] + 1)
 			WEnd
-			WinSetTrans($gif, "", 1)
+			GUISetState(@SW_HIDE, $whole)
+			WinSetTrans($gif, "", Ceiling($light/255))
 			_Update($lefts[0], $tops[0], $lefts[1], $tops[1])
+
+			$square = SquareResize($lefts[0] - 3, $tops[0] - 3, $lefts[1] + 7, $tops[1] + 7, $square)
+			GUISetState(@SW_SHOW, $square)
+
 			Sleep(10)
 			If $UID > 0 Then
 				_Capture($lefts[0], $tops[0], $lefts[1], $tops[1])
@@ -186,6 +195,7 @@ Func _Select()
 				WinMove($right, "", 0, 0, 0, 0)
 				WinMove($down, "", 0, 0, 0, 0)
 				WinMove($gif, "", 0, 0, 0, 0)
+				GUISetState(@SW_HIDE, $square)
 				MsgBox(0, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window")
 			EndIf
 			return
@@ -196,7 +206,6 @@ EndFunc
 Func _Capture($l, $t, $w, $h)
 	$started = 1
 	$filename = @YEAR & "-" & @MON & "-" & @MDAY & "_" & Mod(@HOUR, 12) & "." & @MIN & "." & @SEC
-	;TrayTip("Recording Started", $filename, 5, 1)
 	DirCreate($dir & $filename)
 	Sleep(200)
 	_ScreenCapture_Capture($dir & $filename & "\" & $filename & ".gif", $l, $t, $w + $l, $h + $t, $MOUSE)
@@ -212,6 +221,7 @@ EndFunc
 
 #Region Clear Functions
 Func _Reset()
+	GUISetState(@SW_SHOW, $whole)
 	_Update(0, @DesktopHeight, 0, 0)
 	_Select()
 EndFunc
@@ -232,6 +242,7 @@ Func _Stop()
 		WinMove($right, "", 0, 0, 0, 0)
 		WinMove($down, "", 0, 0, 0, 0)
 		WinMove($gif, "", 0, 0, 0, 0)
+		GUISetState(@SW_HIDE, $square)
 		HotKeySet("{F4}")
 		$theFiles = _getFiles($dir & $filename & "\")
 
@@ -351,7 +362,7 @@ Func _updateGUI()
 	WinSetTrans($left, "", $dark)
 	WinSetTrans($right, "", $dark)
 	WinSetTrans($down, "", $dark)
-	WinSetTrans($gif, "", 1)
+	WinSetTrans($gif, "", Ceiling($light/255))
 EndFunc
 
 Func _updateVar()
@@ -500,58 +511,28 @@ Func _Files()
 	EndIf
 EndFunc
 
-#Region Included
-Func _FileDragDrop($hWnd,$sFiles,$iXPos=0,$iYPos=0,$sSep='|',$bUnicode=True)
-	Local Const $WM_DROPFILES=0x0233
-#cs
-	; DROPFILES structure: dword offset;int x,int y;BOOL fNC;BOOL fWide
-	;	(offset is offset of start of file list, x,y point is location in window [client coords],
-	;	  fNC = if dropped on non-client area [in which case point is in screen coords ], fWide= Unicode flag)
-#ce
-	Local Const $tagDROP_FILES = "dword offset;int px;int py;bool fNC;bool fWide"
-;~ 	Parameter checks
-	If Not IsHWnd($hWnd) Or Not IsString($sFiles) Or $sFiles='' Or $sSep='' Then Return SetError(1,0,False)
-;~ 	Local vars
-	Local $pDropFiles,$stDropFiles,$iExtra=0,$sType=';byte'
-	Local $iStSize=DllStructGetSize(DllStructCreate($tagDROP_FILES)),$iStrLen=StringLen($sFiles)+2	; 2 for double-NULL term
+Func SquareResize($l, $t, $w, $h, $square)
+	GUIDelete($square)
+	return GUICreateSquare($l, $t, $w, $h, 0x00FF00)
+EndFunc
 
-	If $bUnicode Then
-		$iExtra=$iStrLen	; Unicode = 2 bytes per character, so we need to add a 2nd $iStrLen to the allocation
-		$bUnicode=-1
-		$sType=';wchar'		; change type of data (note 'byte' is needed for ANSI/ASCII - not sure why, but it chokes otherwise)
-	EndIf
+Func GUICreateSquare($i_X = -1, $i_Y = -1, $i_W = -1, $i_H = -1, $sColor = $GUI_Bk_Color)
+	Local $hSquare_GUI = GUICreate("", $i_W, $i_H, $i_X, $i_Y, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+	GUISetBkColor($sColor)
+	_GUISetHole($hSquare_GUI, 3, 3, $i_W - 6, $i_H - 6)
+	Return $hSquare_GUI
+EndFunc
 
-;~ 	Allocate memory for the structure and strings, get a pointer to it
-;~ 		0x40 = $GMEM_ZEROINIT (zero-initialize memory) 0 = $GMEM_FIXED (returns a pointer instead of a handle)
-	$pDropFiles = _MemGlobalAlloc($iStSize + $iStrLen+$iExtra,0x40)
-	If $pDropFiles=0 Then Return SetError(-1,0,False)
+Func _GUISetHole($hWin, $i_X, $i_Y, $i_SizeW, $i_SizeH)
+	Local $aWinPos, $Outer_Rgn, $Inner_Rgn, $Wh, $Combined_Rgn
+	Local Const $RGN_DIFF = 4
+	$aWinPos = WinGetPos($hWin)
 
-;~ 	Create the structure with strings appended
-	$stDropFiles = DllStructCreate($tagDROP_FILES & $sType & " filelist[" & $iStrLen & "]", $pDropFiles)
-
-	DllStructSetData($stDropFiles, "offset", $iStSize)	; Offset of file list
-
-;~ 	X,Y Position, in client coords (makes a difference in some programs [Notepad++ for example - center of window is good])
-	DllStructSetData($stDropFiles, "px", $iXPos)
-	DllStructSetData($stDropFiles, "py", $iYPos)
-
-	DllStructSetData($stDropFiles, "fWide", $bUnicode)	; TRUE = unicode
-;~ 	DllStructSetData($stDropFiles, "fNC", 0)		; FALSE = in client area, TRUE = non-client (and x,y pos in screen coords)
-	DllStructSetData($stDropFiles, "filelist", StringReplace($sFiles,$sSep,ChrW(0)))
-
-	; Attempt to Post the Message to the window (SendMessage doesn't work here)
-	If Not _WinAPI_PostMessage($hWnd, $WM_DROPFILES, $pDropFiles, 0) Then
-;~ 		Failed to send message. We can free the memory in this case
-		_MemGlobalFree($pDropFiles)
-		Return SetError(16,0,False)
-	EndIf
-#cs
-	; NOTE: We do *not* free the memory - this is handled by the program receiving the message (and by Windows)
-	;	Technically if that program doesn't handle the message correctly, then we'll wind up with a memory leak
-	;	However, since we can not be sure when/if the message was or will be received, we can't just discard the memory
-	;	that will be used by Windows
-;~ 	_MemGlobalFree($pDropFiles)
-#ce
-	Return True
-EndFunc	;=> _FileDragDrop()
-#endRegion
+	$Outer_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", 0, "long", 0, "long", $aWinPos[2], "long", $aWinPos[3])
+	$Inner_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", $i_Y, "long", $i_Y, "long", $i_Y + $i_SizeW, _
+			"long", $i_Y + $i_SizeH)
+	$Combined_Rgn = DllCall("gdi32.dll", "long", "CreateRectRgn", "long", 0, "long", 0, "long", 0, "long", 0)
+	DllCall("gdi32.dll", "long", "CombineRgn", "long", $Combined_Rgn[0], "long", $Outer_Rgn[0], "long", $Inner_Rgn[0], _
+			"int", $RGN_DIFF)
+	DllCall("user32.dll", "long", "SetWindowRgn", "hwnd", $hWin, "long", $Combined_Rgn[0], "int", 1)
+EndFunc
