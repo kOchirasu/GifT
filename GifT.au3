@@ -34,6 +34,7 @@ EndIf
 
 If _dropboxCheck() == -1 Then
 	MsgBox(0, "Revert", "Reverting to imgur service...")
+	_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
 	IniWrite($INIPATH, "settings", "service", "imgur")
 	Exit
 EndIf
@@ -44,11 +45,11 @@ EndIf
 
 $LOG = FileOpen($LOGPATH, 1)
 
-$VERSION = 11
+$VERSION = 12
 If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
 	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 	If $NEWVERSION > $VERSION Then
-		If MsgBox(262148, "Update", "New version of GifT available.  Would you like to download?") == 6 Then
+		If MsgBox(262148, "Update", "New version of GifT available.  Would you like to download?" & @LF & @LF & "	Newest Version: " & $NEWVERSION) == 6 Then
 			If MsgBox(262148, "Update", "Would you like source files as well?") == 6 Then
 				ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT" & "v" & $NEWVERSION & ".rar", "", "", "open")
 			Else
@@ -91,11 +92,12 @@ $UPLOADURL 	= ""
 $started 	= 0
 $stop 		= 0
 $looping 	= 0
-#endRegion
 
-#region GUI Stuff?
 HotKeySet($RECKEY, "_Record")
 HotKeySet($PICKEY, "_Picture")
+#endRegion
+
+#region Tray Menu + GUI Stuff
 Opt("TrayMenuMode", 3) ; Default tray menu items (Script Paused/Exit) will not be shown. and no checkmarks
 
 $TSETTINGS 	= TrayCreateItem("Settings")
@@ -218,6 +220,10 @@ $SDROPBOX 	= GUICtrlCreateRadio("dropbox", 245, 110, 70, 20)
 GUICtrlCreateLabel("- Imgur has a file limit of 2MB", 15, 175, 200, 20)
 #endregion
 
+#region Old Versions Tab
+GUICtrlCreateTabItem("Old Versions")
+GUICtrlCreateInput("Version", 25, 40, 50, 20)
+
 #region Hotkey window
 $SHOTKEY 	= GUICreate("Set Hotkey", 250, 80, -1, -1, $WS_SYSMENU, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 
@@ -261,6 +267,7 @@ While 1 ;Program Loop
 			_updateGUI()
 			If _dropboxCheck() == -1 Then
 				MsgBox(0, "Revert", "Reverting to imgur service...")
+				_FileWriteLog($LOG, "Reverted to imgur service due to failed Dropbox check")
 				IniWrite($INIPATH, "settings", "service", "imgur")
 				Exit
 			EndIf
@@ -367,7 +374,7 @@ Func _Capture($l, $t, $w, $h) ;Takes pictures of the selection until stopped
 	Sleep(200)
 	$time = timerInit()
 	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & ".gif", $l, $t, $w, $h, $MOUSE) ;First picture is the name of the entire animated gif
-	For $i = 1000 To 9999 ;Starts at 1000 to ensure files are ordered correctly
+	For $i = 1000 To 4999 ;Starts at 1000 to ensure files are ordered correctly
 		While TimerDiff($time) < $FPS
 			Sleep(10)
 		WEnd
@@ -523,6 +530,9 @@ EndFunc   ;==>_Exit
 
 Func _Reset() ;Resets the screen
 	GUISetState(@SW_SHOW, $whole)
+	WinSetOnTop($whole, "", 1)
+	WinSetOnTop($bg, "", 1)
+	WinSetOnTop($gif, "", 1)
 	WinMove($bg, "", 0, 0, @DesktopWidth, @DesktopHeight)
 EndFunc   ;==>_Reset
 
@@ -637,6 +647,7 @@ Func _Cancel() ;Cancels the current recording and deletes files
 		_FileWriteLog($LOG, "Recording canceled and temporary files have been removed from: " & $dir & $FILENAME)
 		$started = 0
 	EndIf
+
 	$looping = 0
 EndFunc
 #endregion Clear Functions
@@ -783,7 +794,8 @@ Func _puushUpload($path, $key) ;Uploads to puush
 	WEnd
 	Local $piclink = StringSplit($output, ",")
 	If Not @error Then
-		return $piclink[2]
+
+		return StringReplace(StringReplace($piclink[2], ".gif", ""), ".png", "")
 	Else
 		MsgBox(0, "", $output)
 		MsgBox(262144 + 4096 + 16, "Error", "Sorry, an error occured", 4)
@@ -1121,7 +1133,7 @@ Func _GUISetHole($hWin, $l, $t, $w, $h) ;Creates a hole in the gui
 	DllCall("user32.dll", "long", "SetWindowRgn", "hwnd", $hWin, "long", $Combined_Rgn[0], "int", 1)
 EndFunc   ;==>_GUISetHole
 
-Func GUICreateSquare($l = -1, $t = -1, $w = -1, $h = -1, $c = 0x00FF00, $thickness = 3) ;Creates a square GUI with a hole
+Func GUICreateSquare($l, $t, $w, $h, $c = 0x00FF00, $thickness = 3) ;Creates a square GUI with a hole
 	$squareGUI = GUICreate("", $w, $h, $l, $t, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
 	GUISetBkColor($c)
 	_GUISetHole($squareGUI, $thickness, $thickness, $w - 2 * $thickness, $h - 2 * $thickness)
