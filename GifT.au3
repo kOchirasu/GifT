@@ -47,7 +47,7 @@ ElseIf _GetTrayText("Dropbox") == "" Then
 	Exit
 EndIf
 
-$VERSION = 4
+$VERSION = 5
 $NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 If $NEWVERSION > $VERSION Then
 	$enable = MsgBox(4, "Update", "New version of GifT available.  Would you like to download?")
@@ -217,6 +217,7 @@ Func _Select() ;Selection process to determine what to record
 		If _IsPressed("1") Then
 			HotKeySet("{F4}", "_Stop")
 			HotKeySet("{ESC}", "_Cancel")
+			HotKeySet("^+v")
 			$mp = MouseGetPos()
 			WinSetTrans($gif, "", $LIGHT)
 			While _IsPressed("01")
@@ -300,6 +301,7 @@ Func _Stop() ;Stops the current recording and completes final steps
 			SoundPlay(@HomeDrive & "\GifT\beep.mp3")
 		EndIf
 		TrayTip("Upload Complete", $UPLOADURL, 5, 1)
+		HotKeySet("^+v", "_Reset")
 		If IniRead($INIPATH, "settings", "copy", "1") == 1 Then
 			ClipPut($UPLOADURL)
 		EndIf
