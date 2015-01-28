@@ -16,14 +16,15 @@
 #include "_ColorChooser.au3"
 #include "_ColorPicker.au3"
 #include "_FileDragDrop.au3"
+#include "_FreeImage.au3"
 
 Global $hImage, $hGraphic, $hGUI
 $GIFTPATH 	= @HomeDrive & "\GifT\"
 $INIPATH 	= $GIFTPATH & "settings.ini"
 $LOGPATH	= $GIFTPATH & "uploads.log"
-$SERVICE 	= IniRead($INIPATH, "settings", "service", "imgur")
 $SHORTEN	= IniRead($INIPATH, "settings", "shorten", "waa.ai")
-
+$SERVICE 	= IniRead($INIPATH, "settings", "service", "imgur")
+$GIFTYPE 	= IniRead($INIPATH, "settings", "quantize", "None")
 _Splash(-1) ;Turn on splash image until loading is complete
 
 #region Error Check
@@ -44,7 +45,7 @@ EndIf
 
 $LOG = FileOpen($LOGPATH, 1)
 
-$VERSION = 12.1
+$VERSION = 13
 If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
 	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 	If $NEWVERSION > $VERSION Then
@@ -122,21 +123,21 @@ $STABS 		= GUICtrlCreateTab(7, 7, 367, 195)
 
 #region Settings - General Tab
 GUICtrlCreateTabItem("General")
-$SCOPY 		= GUICtrlCreateCheckbox(" Copy link to clipboard", 20, 100, 120, 20)
-$SOPEN 		= GUICtrlCreateCheckbox(" Open link in browser", 20, 125, 115, 20)
-$SPICS		= GUICtrlCreateCheckbox(" Save picture locally", 20, 150, 110, 20)
-$SDELETE 	= GUICtrlCreateCheckbox(" Delete files after conversion", 20, 175, 150, 20)
-$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 205, 100, 125, 20)
-$SMOUSE 	= GUICtrlCreateCheckbox(" Capture screen with mouse", 205, 125, 150, 20)
-$SSAVE 		= GUICtrlCreateCheckbox(" Save gif file locally", 205, 150, 110, 20)
-$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 205, 175, 120, 20)
+$SCOPY 		= GUICtrlCreateCheckbox(" Copy link to clipboard", 20, 98, 120, 20)
+$SOPEN 		= GUICtrlCreateCheckbox(" Open link in browser", 20, 123, 115, 20)
+$SPICS		= GUICtrlCreateCheckbox(" Save picture locally", 20, 148, 110, 20)
+$SDELETE 	= GUICtrlCreateCheckbox(" Delete files after conversion", 20, 173, 150, 20)
+$SSOUND 	= GUICtrlCreateCheckbox(" Play notification sound", 205, 98, 125, 20)
+$SMOUSE 	= GUICtrlCreateCheckbox(" Capture screen with mouse", 205, 123, 150, 20)
+$SSAVE 		= GUICtrlCreateCheckbox(" Save gif file locally", 205, 148, 110, 20)
+$SUPDATE 	= GUICtrlCreateCheckbox(" Check for updates", 205, 173, 120, 20)
 
-$SAPI 		= GUICtrlCreateInput(0, 100, 35, 260, 22)
-$SUID 		= GUICtrlCreateInput(0, 100, 65, 75, 22, $ES_NUMBER)
-$SFPS 		= GUICtrlCreateInput(5, 315, 65, 45, 22, $ES_NUMBER)
-GUICtrlCreateLabel("Puush API Key:", 15, 39,90, 20)
-GUICtrlCreateLabel("Dropbox UID:", 15, 69, 80, 20)
-GUICtrlCreateLabel("Frames per Second:", 200, 69, 100, 20)
+$SAPI 		= GUICtrlCreateInput(0, 102, 37, 260, 22)
+$SUID 		= GUICtrlCreateInput(0, 102, 67, 75, 22, $ES_NUMBER)
+$SFPS 		= GUICtrlCreateInput(5, 317, 67, 45, 22, $ES_NUMBER)
+GUICtrlCreateLabel("Puush API Key:", 17, 41, 90, 20)
+GUICtrlCreateLabel("Dropbox UID:", 17, 71, 80, 20)
+GUICtrlCreateLabel("Frames per Second:", 202, 71, 100, 20)
 
 GUICtrlSetLimit($SFPS, 2)
 GUICtrlSetLimit($SAPI, 32)
@@ -162,7 +163,7 @@ GUICtrlSetFont($SCANCDF, 12, 400, 0, "Webdings")
 GUICtrlCreateLabel("Select Area for Recording:", 25, 45, 125, 20, $ES_RIGHT)
 GUICtrlCreateLabel("Select Area for Picture:", 25, 75, 125, 20, $ES_RIGHT)
 GUICtrlCreateLabel("Complete Recording:", 25, 105, 125, 20, $ES_RIGHT)
-GUICtrlCreateLabel("Cancel Recording:", 25, 135, 125, 20, $ES_RIGHT)
+GUICtrlCreateLabel("Cancel Select/Record:", 25, 135, 125, 20, $ES_RIGHT)
 #endregion
 
 #region Settings - Paths Tab
@@ -217,9 +218,18 @@ $SDROPBOX 	= GUICtrlCreateRadio("dropbox", 245, 110, 70, 20)
 GUICtrlCreateLabel("- Imgur has a file limit of 2MB", 15, 175, 200, 20)
 #endregion
 
-#region Old Versions Tab
-GUICtrlCreateTabItem("Old Versions")
-GUICtrlCreateInput("Version", 25, 40, 50, 20)
+#region Misc. Tab
+GUICtrlCreateTabItem("Misc.")
+GUICtrlCreateGroup("Color Quantization", 15, 35, 350, 50)
+GUIStartGroup()
+$SCQXIAO 	= GUICtrlCreateRadio("Xiaolin Wu", 25, 55, 70, 20)
+$SCQNEURAL 	= GUICtrlCreateRadio("Neural-Net", 135, 55, 70, 20)
+$SCQNONE 	= GUICtrlCreateRadio("None", 245, 55, 70, 20)
+GUICtrlCreateGroup("Older Versions", 15, 90, 350, 50)
+GUICtrlCreateLabel("Version:", 25, 112, 50, 20)
+GUICtrlCreateLabel("Current Version: v" & $VERSION, 250, 112, 120, 20)
+$SVSELECT	= GUICtrlCreateInput($VERSION, 75, 110, 30, 20, $ES_NUMBER)
+$SDLSOURCE	= GUICtrlCreateButton("Download Source", 130, 105, 100, 27)
 
 #region Hotkey window
 $SHOTKEY 	= GUICreate("Set Hotkey", 250, 80, -1, -1, $WS_SYSMENU, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
@@ -250,7 +260,7 @@ While 1 ;Program Loop
 			_Exit()
 
 		Case $TMSG = $TABOUT
-			MsgBox(64, "About: GifT", "GIF recorder and uploader via Imgur/Puush/Dropbox" & @LF & "with waa.ai/bit.ly as the URL shortener" & @LF & @LF & "Coded in Autoit")
+			MsgBox(64, "About: GifT v" & $VERSION, "GIF recorder and uploader via Imgur/Puush/Dropbox" & @LF & "with waa.ai/bit.ly as the URL shortener" & @LF & @LF & "Coded in Autoit")
 
 		Case $TMSG = $TSETTINGS ;Open Settings Window
 			GUISetState(@SW_SHOW, $SMAIN)
@@ -360,6 +370,25 @@ While 1 ;Program Loop
 			$SERVICE = GUICtrlRead($MSG, 1)
 			IniWrite($INIPATH, "settings", "service", $SERVICE)
 
+		Case $SCQXIAO, $SCQNEURAL, $SCQNONE
+			$str = GUICtrlRead($MSG, 1)
+			If $str = "None" Then
+				$GIFTYPE = 0
+			ElseIf $str = "Xiaolin Wu" Then
+				$GIFTYPE = 1
+			ElseIf $str = "Neural-Net" Then
+				$GIFTYPE = 2
+			EndIf
+			IniWrite($INIPATH, "settings", "quantize", $GIFTYPE)
+
+		Case $SDLSOURCE
+			$VER = GUICtrlRead($SVSELECT)
+			If $VER < 1 Or $VER > $VERSION Then
+				MsgBox(0, "Error!", "Invalid version number. Please try again.")
+			Else
+				ShellExecute("https://dl.dropboxusercontent.com/u/113843502/GifT/GifT" & "v" & $VER & ".rar", "", "", "open")
+			EndIf
+
 	EndSwitch
 	Sleep(5)
 WEnd
@@ -370,13 +399,18 @@ Func _Capture($l, $t, $w, $h) ;Takes pictures of the selection until stopped
 	DirCreate($dir & $FILENAME)
 	Sleep(200)
 	$time = timerInit()
-	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & ".gif", $l, $t, $w, $h, $MOUSE) ;First picture is the name of the entire animated gif
+	If $GIFTYPE == 0 Then
+		$EXT = ".gif"
+	Else
+		$EXT = ".png"
+	EndIf
+	_ScreenCapture_Capture($dir & $FILENAME & "\" & $FILENAME & $EXT, $l, $t, $w, $h, $MOUSE) ;First picture is the name of the entire animated gif
 	For $i = 1000 To 4999 ;Starts at 1000 to ensure files are ordered correctly
 		While TimerDiff($time) < $FPS
 			Sleep(10)
 		WEnd
 		$time = timerInit()
-		_ScreenCapture_Capture($dir & $FILENAME & "\~" & $i & ".gif", $l, $t, $w, $h, $MOUSE)
+		_ScreenCapture_Capture($dir & $FILENAME & "\~" & $i & $EXT, $l, $t, $w, $h, $MOUSE)
 		If $started == 0 Then ;runs until stopped
 			Return
 		EndIf
@@ -440,10 +474,12 @@ EndFunc
 Func _Select($action) ;Selection process to determine what to record/take picture of
 	$looping = 1
 	If $SERVICE = "dropbox" And $UID <= 0 Then ;Check if UID is correctly set up
+		WinMove($bg, "", 0, 0, 0, 0)
 		MsgBox(0, "Error", "Unable to start capture due to UID value: " & $UID & @LF & "Please update your UID in the settings window.")
 		_FileWriteLog($LOG, "Error: UID value - " & $UID & " is not valid")
 		$looping = 0
 	ElseIf $SERVICE = "puush" And StringLen($PUSHKEY) <> 32 Then ;Check if API key is correctly set up
+		WinMove($bg, "", 0, 0, 0, 0)
 		MsgBox(0, "Error", "Unable to start capture due to API key value " & $PUSHKEY & @LF & "Please update your API key in the settings window.")
 		_FileWriteLog($LOG, "Error: API key value - " & $PUSHKEY & " is not valid")
 		$looping = 0
@@ -547,7 +583,12 @@ Func _Stop() ;Stops the current recording and completes final steps
 		GUISetState(@SW_HIDE, $square)
 		HotKeySet($COMPKEY)
 		HotKeySet($CANCKEY)
+
 		$theFiles = _getFiles($dir & $FILENAME & "\")
+
+		If $GIFTYPE <> 0 Then
+			$theFiles = _ConvertFiles($theFiles, $dir & $FILENAME & "\")
+		EndIf
 
 		If $service = "dropbox" Then
 			_convert($theFiles, $path, $FPS, $GIFTPATH & "Gif.exe")
@@ -645,9 +686,15 @@ EndFunc
 #endregion Clear Functions
 
 #region Helper Functions
-Func _getFiles($dir) ;Gets list of files from $dir (Local directory)
+Func _getFiles($dir, $type = $GIFTYPE) ;Gets list of files from $dir (Local directory)
 	Local $ret = ""
-	Local $FileList = _FileListToArray($dir, "*.gif", 1)
+	If $type == 0 Then
+		$EXT = ".gif"
+	Else
+		$EXT = ".png"
+	EndIf
+
+	Local $FileList = _FileListToArray($dir, "*" & $EXT, 1)
 	If @error = 1 Then
 		MsgBox(0, "", "No Folders Found.")
 		_FileWriteLog($LOG, "No folders found in: " & $dir)
@@ -658,6 +705,10 @@ Func _getFiles($dir) ;Gets list of files from $dir (Local directory)
 		_FileWriteLog($LOG, "No files found in: " & $dir)
 		Exit
 	EndIf
+	If $type <> 0 Then
+		Return $FileList
+	EndIf
+
 	For $i = 1 To $FileList[0] Step 1
 		$ret &= $dir & $FileList[$i] & "|"
 	Next
@@ -841,6 +892,26 @@ Func _convert($file, $output, $delay, $path) ;Animates a list of .gif using Gif.
 	WinWaitClose($hWnd)
 EndFunc   ;==>_convert
 
+Func _convertFiles($files, $dir, $type = 1) ;Converts .png to .gif (better quality)
+	_FreeImage_LoadDLL($GIFTPATH & "FreeImage.dll")
+	_FreeImage_Initialise()
+
+	For $i = 1 To $files[0] Step 1
+		$hImage = _FreeImage_LoadU($FIF_PNG, $dir & $files[$i])
+		$hBmp = _FreeImage_ConvertTo24Bits($hImage)
+		$hGif = _FreeImage_ColorQuantizeEx($hBmp, $GIFTYPE - 1)
+
+		_FreeImage_SaveU($FIF_GIF, $hGif, $dir & StringReplace($files[$i], ".png", ".gif"))
+		_FreeImage_Unload($hImage)
+		_FreeImage_Unload($hBmp)
+		_FreeImage_Unload($hGif)
+	Next
+	FileDelete($dir & "*.png")
+	_FreeImage_DeInitialise()
+
+	return _getFiles($dir, 0)
+EndFunc    ;==>_convertFiles
+
 Func _convertHotkey($key) ;converts hotkey from actual to string form
 	If $key = "!" Then
 		return "ALT"
@@ -920,6 +991,15 @@ Func _loadIni() ;Loads .ini file and sets data to controls (settings window)
 		GUICtrlSetState($SPUUSH, $GUI_CHECKED)
 	Else
 		GUICtrlSetState($SIMGUR, $GUI_CHECKED)
+	EndIf
+
+	$temp = IniRead($INIPATH, "settings", "quantize", 0)
+	If $temp = 1 Then
+		GUICtrlSetState($SCQXIAO, $GUI_CHECKED)
+	ElseIf $temp = 2 Then
+		GUICtrlSetState($SCQNEURAL, $GUI_CHECKED)
+	Else
+		GUICtrlSetState($SCQNONE, $GUI_CHECKED)
 	EndIf
 EndFunc   ;==>_loadIni
 
@@ -1109,6 +1189,10 @@ Func _Files() ;Additional files that are needed to run the program
 	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\curl.exe", $GIFTPATH & "curl.exe") ;used for uploading files
 	If $check == 0 Then
 		FileCopy(@ScriptDir & "curl.exe", $GIFTPATH & "curl.exe")
+	EndIf
+	$check = FileInstall("C:\Users\Computer\Documents\Autoit\GifTsrc\FreeImage.dll", $GIFTPATH & "FreeImage.dll") ;used for converting files
+	If $check == 0 Then
+		FileCopy(@ScriptDir & "FreeImage.dll", $GIFTPATH & "FreeImage.dll")
 	EndIf
 EndFunc   ;==>_Files
 
