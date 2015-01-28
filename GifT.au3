@@ -24,7 +24,7 @@ $INIPATH 	= $GIFTPATH & "settings.ini"
 $LOGPATH	= $GIFTPATH & "uploads.log"
 $SHORTEN	= IniRead($INIPATH, "settings", "shorten", "waa.ai")
 $SERVICE 	= IniRead($INIPATH, "settings", "service", "imgur")
-$GIFTYPE 	= IniRead($INIPATH, "settings", "quantize", "None")
+$GIFTYPE 	= IniRead($INIPATH, "settings", "quantize", 0)
 _Splash(-1) ;Turn on splash image until loading is complete
 
 #region Error Check
@@ -45,7 +45,7 @@ EndIf
 
 $LOG = FileOpen($LOGPATH, 1)
 
-$VERSION = 13
+$VERSION = 13.1
 If IniRead($INIPATH, "settings", "update", $GUI_CHECKED) == $GUI_CHECKED Then
 	$NEWVERSION = Number(BinaryToString(InetRead("https://dl.dropboxusercontent.com/u/113843502/GifT/Version.txt")))
 	If $NEWVERSION > $VERSION Then
